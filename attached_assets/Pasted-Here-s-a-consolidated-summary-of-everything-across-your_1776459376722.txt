@@ -1,0 +1,315 @@
+Here’s a consolidated summary of everything across your notes.
+
+-----
+
+**The Core Idea**
+
+You’re building an app called **Continuity** — not a todo app, not a productivity dashboard. The central insight is that people don’t fail at projects because they can’t list tasks; they fail because they lose *context, momentum, and intent* between work sessions. The product is a re-entry tool: when you come back to a project after any gap, it gives you an intelligent briefing on where you left off, why it matters, and what to do next.
+
+-----
+
+**The Product Philosophy**
+
+The briefing is the product — not the task list, not the note store. Everything else (integrations, worksheets, passive capture) exists to make the briefing better. If the briefing doesn’t genuinely pull users back into work faster, the idea needs tightening, not more features.
+
+The app should feel like a *patient collaborator*, not a system that punishes you for going dark. Silence is treated gracefully, never punitively.
+
+-----
+
+**Three Operating Modes**
+
+The app switches between these automatically:
+
+- **Active mode** — user is regularly updating; briefing is generated from rich recent context
+- **Coasting mode** — some passive signal exists but no user input; briefing is inferred from integrations and last known intent, flagged as such
+- **Dark mode** — no signal at all for X days; the app surfaces the last known state with a confidence/staleness indicator and sends one gentle re-entry prompt. It never pretends to know more than it does.
+
+The confidence labeling (“based on info from 2 weeks ago”) is important for preserving user trust.
+
+-----
+
+**The Two User Types**
+
+You identified two representative users with almost opposite tooling:
+
+- **Developers** — passive signal is rich: git commits, PR states, branch names, file modification timestamps, calendar events, Linear/Jira tickets. Silence from the user doesn’t mean silence from the project.
+- **Non-developers (SMB owners, etc.)** — no passive signal. Progress lives in conversations, decisions, notes, money in/out. For these users the app relies on lightweight active capture: voice notes, a sentence, a photo.
+
+Crucially, both users need the *same output shape*: what’s moving, what’s stalled, what to focus on next. The flexibility isn’t in the integrations — it’s in the **input tolerance**. The same inference engine serves both user types.
+
+-----
+
+**Worksheets**
+
+Worksheets are the structured middle path between passive silence and active voice dumps. The key design constraint is that they must feel like a conversation, not a form — 3 to 5 questions, pre-filled with what the app already knows, asking only what it doesn’t.
+
+Four worksheet moments:
+
+1. **Project kickoff** — captures intent before the user dives in
+1. **Re-entry after silence** — a warm probe instead of a cold briefing
+1. **Milestone moments** — catches transitions before momentum dies
+1. **Weekly pulse** — one momentum rating plus one unblock question
+
+The “**Still same as last**” button is a key UX concept: most of the time nothing changed, so zero-effort confirmation should be the lowest-friction path. One tap keeps the briefing accurate.
+
+Each worksheet answer becomes a tagged state node (intent, blocker, momentum, last confirmed). The briefing pulls from these nodes rather than raw notes, so even sparse answers produce a clean output.
+
+-----
+
+**The Moat Problem (and the Strategy)**
+
+You correctly identified the core risk early: “AI wrapper → poor differentiation / moat.” A product that just accepts dumps and summarizes them dies fast. The moat strategy across the four phases is:
+
+- **Brand** (starts immediately, costs nothing) — calm, human, non-utilitarian tone that compounds over time
+- **Integration depth** (Phase 2) — not just reading commits, but inferring momentum shifts, stagnation, and phase changes
+- **Personal cognitive model** (Phase 2) — the app learns how each user describes blockers vs. progress and calibrates briefing language per person
+- **Workflow embedding** (Phase 3) — Slack bot and VS Code sidebar mean switching requires restructuring the entire workday; infrastructure is harder to leave than an app
+- **User data / switching cost** (Phase 4) — after 12+ months the app knows your patterns, pace, and language; leaving means starting over; make this loss visible to users
+- **Distribution partnership** (Phase 4) — one embedded integration with a major PM tool (Notion, Linear) is nearly impossible to dislodge
+
+The thesis is that no single moat survives alone — the defensible position comes from all of them compounding together.
+
+-----
+
+**The Four-Phase Roadmap**
+
+- **Phase 1 (0–2 months):** Manual input only. Prove the briefing output is valuable before automating the input. Test on yourself and five friends.
+- **Phase 2 (2–5 months):** Add Git and calendar integrations. Ship public beta of 50–100 users. Begin building the personal cognitive model.
+- **Phase 3 (5–10 months):** Slack/Discord bot, VS Code sidebar. First paying users. Lock the non-developer segment before any well-funded competitor notices it’s valuable.
+- **Phase 4 (10–18 months):** Project behavior pattern library built from aggregate worksheet data. Predictive nudges. Series A readiness with a clear moat narrative.
+
+-----
+
+**Phase 1 Architecture — Manual Input, Briefing Output**
+
+-----
+
+**Guiding constraint**
+
+No integrations. No passive capture. The only goal is proving the briefing is worth coming back for. Keep the stack boring so you can move fast.
+
+-----
+
+**Frontend**
+
+React Native (Expo) for mobile-first. Your core re-entry moment happens on a phone — you’re picking up a project, not sitting at a desk. Web can come later via Expo Web if needed, no rewrite required.
+
+-----
+
+**Input layer**
+
+Two input types only:
+
+- Free text
+- Voice note → transcribed via Whisper API on upload
+
+Both go into the same pipeline. No distinction downstream.
+
+-----
+
+**Backend**
+
+Node/Express or FastAPI — pick whichever you’re faster in. Single service for now. Three endpoints are all you need:
+
+- `POST /update` — receives raw user input, stores it
+- `POST /briefing` — triggers briefing generation for a project
+- `GET /project/:id` — returns current project state + last briefing
+
+-----
+
+**Storage**
+
+Postgres. One `projects` table, one `updates` table, one `briefings` table. The updates table is append-only — never edit, only add. This gives you a natural history log without building anything special.
+
+-----
+
+**Briefing engine**
+
+A prompt sent to Claude or GPT-4 that receives: all recent updates for a project, the last known briefing, and the worksheet answers if any exist. Output is always the same four fields: last known state, confidence level, blockers, next 1–3 actions. Lock the output schema now — everything downstream depends on it being consistent.
+
+-----
+
+**Dark mode mechanic**
+
+A cron job runs daily. If a project has no updates in 5 days, it queues a re-entry prompt to the user. That’s it. No ML, no inference — just a timestamp check.
+
+-----
+
+**Auth**
+
+Clerk or Supabase Auth. Don’t build this yourself.
+
+-----
+
+**What you’re not building in Phase 1**
+
+No integrations, no real-time anything, no notification infrastructure beyond the one cron, no mobile push yet. If you’re tempted to add something, ask whether it makes the briefing better. If not, it’s Phase 2.
+
+**Final Architecture — Defensible Data Product**
+
+-----
+
+**Start here: what the moats actually require you to own**
+
+Every moat traces back to a data asset. If you don’t own the data, you don’t own the moat.
+
+- **Personal cognitive model** → you need per-user longitudinal data on how they describe work: their language, their blocker patterns, their update cadence, how they signal stress vs. confidence
+- **Behavioral pattern library** → you need aggregate cross-user data on how projects move, stall, recover, and die — tagged by project type, user type, phase
+- **Integration depth** → you need raw event streams from external tools, not just summaries. The inference layer needs the raw signal to detect momentum shifts
+- **Switching cost** → you need the full history of every update, worksheet answer, and briefing ever generated per user. The value of leaving has to feel tangible and lossy
+- **Workflow embedding** → less a data moat, more a distribution one. But it still requires activity data from inside those tools (Slack messages, VS Code sessions) to feed the briefing
+
+-----
+
+**The core data model**
+
+Everything in the product is one of four things:
+
+- **Signal** — raw input: voice note, text update, commit, Slack message, calendar event
+- **State** — derived from signals: what the app believes is true about a project right now
+- **Briefing** — a point-in-time snapshot of state, generated for a specific re-entry moment
+- **Feedback** — implicit or explicit user response to a briefing: did they act on it, correct it, ignore it
+
+Every signal gets stored raw, immutably, with source metadata. State is always derived, never manually set. This separation is what lets you retrain inference models later without losing history.
+
+-----
+
+**What you need to capture per user (cognitive model)**
+
+This is your most defensible asset and the hardest to replicate. You need:
+
+- Every update they’ve ever written, verbatim, timestamped
+- Every worksheet answer, tagged by worksheet type and project phase
+- How often they update per project type
+- The gap between when the app nudged them and when they responded
+- Whether they corrected a briefing, and what they changed
+
+That last one is gold. Briefing corrections are labeled training data handed to you for free.
+
+-----
+
+**What you need to capture per project (pattern library)**
+
+- Project type (developer, SMB, creative — self-reported or inferred)
+- Momentum score over time (derived from update frequency + worksheet pulse answers)
+- Stagnation events: when did it go dark, for how long, what broke the silence
+- Outcome: did the project complete, get abandoned, or go indefinitely dormant
+- Which briefing outputs preceded a re-engagement vs. a dropout
+
+This is the corpus nobody else has. It’s what makes predictive nudges possible in Phase 4.
+
+-----
+
+**Capture architecture**
+
+Two parallel pipelines:
+
+**Active pipeline** — user-generated signal
+Everything the user directly inputs goes through an event bus (Kafka or lightweight substitute like Inngest for early scale). Each event is: `{user_id, project_id, source_type, raw_content, timestamp}`. Stored immutably in S3 or equivalent cold storage. Processed copy lives in Postgres for live querying.
+
+**Passive pipeline** — integration-generated signal
+OAuth connections to GitHub, Slack, Linear, Google Calendar. Each integration has a collector service that normalizes events into the same schema as active signals before they hit the event bus. Normalization is critical — downstream models shouldn’t care whether signal came from a voice note or a commit.
+
+Both pipelines feed the same state derivation layer.
+
+-----
+
+**State derivation layer**
+
+This is where raw signals become structured project state. Three components:
+
+- **Extractor** — pulls entities from raw signals: intent, blockers, decisions, milestones
+- **Reconciler** — merges new extractions with existing state, handles conflicts, applies time decay to stale nodes
+- **Confidence scorer** — assigns a freshness/confidence score to each state node based on signal recency and source reliability
+
+This layer needs to be modular from day one. You’ll retrain the extractor as your data grows. If it’s coupled to the briefing generator, retraining breaks production.
+
+-----
+
+**Briefing generation**
+
+Takes current state + user cognitive model profile as context. Outputs the fixed four-field schema. Every generated briefing is stored with the exact state snapshot that produced it — this is your training data for future briefing quality models.
+
+User feedback on briefings (corrections, ignored nudges, acted-on suggestions) gets written back to a feedback table linked to that briefing ID.
+
+-----
+
+**The infrastructure you need to build now**
+
+You don’t need Kafka on day one. But you need the *shape* of the architecture in place:
+
+- Immutable append-only event log from the start — even if it’s just a Postgres table with insert-only permissions. Never update signal records.
+- A consistent event schema across all input types from day one. Retrofitting this later is painful.
+- Store briefings with their source state snapshot. You’ll want this for evals and retraining.
+- Tag every worksheet answer with worksheet type, project phase, and project type. Raw text alone isn’t enough.
+- Log every nudge you send and every response (or non-response). Silence is signal.
+
+The decisions that are cheap now and expensive later are all schema decisions. Get the event schema and the briefing storage format right in Phase 1, and the rest of the architecture can evolve naturally.
+
+Good instinct. Here’s everything worth considering, grouped by where it comes from.
+
+-----
+
+**In-app behavior we’re not capturing**
+
+- Session start and end timestamps — currently assumed but not explicit. Tells you whether a briefing preceded a work session without having to ask.
+- Which specific briefing field they read longest — if you can instrument scroll depth or time per section, you learn which parts of the briefing actually get used
+- Briefing dismissed without reading — different signal from “opened but didn’t act”
+- Nudge dismissed without responding — currently we capture non-response but not explicit dismissal. Those are different behaviors.
+- How many times they re-opened the same briefing — once means it worked, three times means it didn’t
+- Worksheet question edit — did they change their answer before submitting? Signals uncertainty or reconsideration
+- App open without any action taken — tells you about anxiety-driven checking behavior, common in ADHD profiles
+
+-----
+
+**About the user we’re not capturing**
+
+- Device type and OS — relevant for UX adaptation decisions later
+- Timezone — you have time of day from timestamps but without timezone it’s meaningless. A 2am update means something different than a 10am one
+- First language if detectable — briefing language calibration matters more if English isn’t primary
+- Onboarding path — how did they set up their first project? What did they skip? Predicts long term engagement patterns
+
+-----
+
+**About projects we’re not capturing**
+
+- Project type — developer, SMB, creative, personal. Even a self-reported field at creation is valuable. You can infer later but ground truth early is better
+- Stated deadline or timeframe at project creation — lets you correlate urgency with update behavior
+- Project relationship — is this a solo project or does it involve other people even if they’re not in the app? Relevant context for briefing generation
+- Explicit project close event — currently you infer abandonment vs. completion. A “mark as done” event with an optional outcome note is clean ground truth for the pattern library
+
+-----
+
+**About integrations we’re not capturing yet**
+
+When passive integrations arrive in Phase 2, store the raw webhook payload before normalization, not just the normalized version. Normalization logic will change as you learn more about what matters. Raw payloads let you reprocess with better logic later.
+
+-----
+
+{
+event_id,
+schema_version: 1,
+user_id,
+project_id,
+event_type,
+modality,
+raw_content,
+source,
+timestamp,
+metadata: {}
+}
+
+**The ones to add to Phase 1 schema immediately**
+
+These cost almost nothing to add now and would be painful to retrofit:
+
+- Session start/end events
+- Timezone on user profile
+- Project type on project creation (even just a free text field)
+- Project close event with outcome field (completed / abandoned / paused)
+- Explicit nudge dismissal event separate from non-response
+- `schema_version` if not already there
+
+Everything else in this list is either Phase 2 instrumentation or requires UI changes you’re not ready to make. But flag them in your architecture decision record so they don’t get forgotten.
+
+what in the checklist is covered here?

@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Continuity API - re-entry briefing app
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: projects
+    description: Project management
+  - name: updates
+    description: Project updates (brain dumps)
+  - name: briefings
+    description: AI-generated briefings
+  - name: worksheets
+    description: Re-entry worksheets
 paths:
   /healthz:
     get:
@@ -24,6 +32,232 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectBody"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          description: Invalid request
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a project by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project with latest briefing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectBody"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /projects/{id}/updates:
+    get:
+      operationId: listProjectUpdates
+      tags: [updates]
+      summary: List updates for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of updates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Update"
+    post:
+      operationId: createUpdate
+      tags: [updates]
+      summary: Add a text update (brain dump) to a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUpdateBody"
+      responses:
+        "201":
+          description: Created update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Update"
+        "400":
+          description: Invalid request
+
+  /projects/{id}/briefing:
+    post:
+      operationId: generateBriefing
+      tags: [briefings]
+      summary: Generate a new briefing for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Generated briefing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Briefing"
+        "404":
+          description: Not found
+        "500":
+          description: AI generation error
+
+  /projects/{id}/briefings:
+    get:
+      operationId: listProjectBriefings
+      tags: [briefings]
+      summary: List all briefings for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of briefings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Briefing"
+
+  /projects/{id}/worksheet:
+    post:
+      operationId: submitWorksheet
+      tags: [worksheets]
+      summary: Submit a worksheet (re-entry check-in) for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitWorksheetBody"
+      responses:
+        "201":
+          description: Worksheet submitted and update created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Update"
+        "400":
+          description: Invalid request
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [projects]
+      summary: Dashboard summary stats
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +268,219 @@ components:
       required:
         - status
 
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, coasting, dark]
+        confidenceLevel:
+          type: string
+          enum: [high, medium, low]
+        projectType:
+          type: string
+          enum: [developer, smb, creative, other]
+        lastActivityAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - title
+        - status
+        - confidenceLevel
+        - projectType
+        - createdAt
+        - updatedAt
+
+    ProjectDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [active, coasting, dark]
+        confidenceLevel:
+          type: string
+          enum: [high, medium, low]
+        projectType:
+          type: string
+          enum: [developer, smb, creative, other]
+        lastActivityAt:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        latestBriefing:
+          $ref: "#/components/schemas/Briefing"
+        recentUpdates:
+          type: array
+          items:
+            $ref: "#/components/schemas/Update"
+      required:
+        - id
+        - title
+        - status
+        - confidenceLevel
+        - projectType
+        - createdAt
+        - updatedAt
+        - recentUpdates
+
+    CreateProjectBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        projectType:
+          type: string
+          enum: [developer, smb, creative, other]
+      required:
+        - title
+
+    UpdateProjectBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [active, coasting, dark]
+        projectType:
+          type: string
+          enum: [developer, smb, creative, other]
+
+    Update:
+      type: object
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        content:
+          type: string
+        sourceType:
+          type: string
+          enum: [text, voice, worksheet]
+        tags:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - projectId
+        - content
+        - sourceType
+        - tags
+        - createdAt
+
+    CreateUpdateBody:
+      type: object
+      properties:
+        content:
+          type: string
+        sourceType:
+          type: string
+          enum: [text, voice, worksheet]
+      required:
+        - content
+
+    Briefing:
+      type: object
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        lastKnownState:
+          type: string
+        confidenceLevel:
+          type: string
+          enum: [high, medium, low]
+        blockers:
+          type: array
+          items:
+            type: string
+        nextActions:
+          type: array
+          items:
+            type: string
+        rawOutput:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - projectId
+        - lastKnownState
+        - confidenceLevel
+        - blockers
+        - nextActions
+        - rawOutput
+        - createdAt
+
+    SubmitWorksheetBody:
+      type: object
+      properties:
+        momentumRating:
+          type: integer
+        currentStatus:
+          type: string
+        mainBlocker:
+          type: ["string", "null"]
+        nextStep:
+          type: string
+        sameAsLast:
+          type: boolean
+      required:
+        - momentumRating
+        - currentStatus
+        - nextStep
+
+    DashboardStats:
+      type: object
+      properties:
+        totalProjects:
+          type: integer
+        activeProjects:
+          type: integer
+        coastingProjects:
+          type: integer
+        darkProjects:
+          type: integer
+        totalUpdates:
+          type: integer
+        totalBriefings:
+          type: integer
+        recentActivity:
+          type: array
+          items:
+            $ref: "#/components/schemas/Update"
+      required:
+        - totalProjects
+        - activeProjects
+        - coastingProjects
+        - darkProjects
+        - totalUpdates
+        - totalBriefings
+        - recentActivity

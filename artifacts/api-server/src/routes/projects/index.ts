@@ -27,7 +27,8 @@ router.get("/projects", async (_req, res): Promise<void> => {
     .select()
     .from(projectsTable)
     .orderBy(desc(projectsTable.updatedAt));
-  res.json(projects);
+  // Hide the internal notes bucket from UI
+  res.json(projects.filter((p) => p.title !== "__notes__"));
 });
 
 // POST /projects
@@ -345,7 +346,15 @@ router.get("/updates", async (_req, res): Promise<void> => {
     .innerJoin(projectsTable, eq(updatesTable.projectId, projectsTable.id))
     .orderBy(updatesTable.createdAt);
 
-  res.json(rows);
+  // Mark rows from the internal __notes__ bucket as notes
+  const normalised = rows.map((row) => ({
+    ...row,
+    isNote: row.projectTitle === "__notes__",
+    projectId: row.projectTitle === "__notes__" ? null : row.projectId,
+    projectTitle: row.projectTitle === "__notes__" ? null : row.projectTitle,
+  }));
+
+  res.json(normalised);
 });
 
 // POST /brain-dump — global input with AI project classification
@@ -361,6 +370,38 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
 
   const classification = await classifyInput(content, existingProjects);
 
+  // ── Note: save without attaching to any project ──────────────────────────
+  if (classification.isNote) {
+    // Store as a loose update with no projectId by using a special "notes" project,
+    // or — since the schema requires projectId — we save it against a persistent
+    // "Notes" project that we find-or-create but never surface as a real project.
+    let notesProject = existingProjects.find((p) => p.title === "__notes__");
+    if (!notesProject) {
+      [notesProject] = await db
+        .insert(projectsTable)
+        .values({
+          title: "__notes__",
+          description: "Internal bucket for loose notes",
+          projectType: "other",
+        })
+        .returning();
+    }
+
+    const [update] = await db
+      .insert(updatesTable)
+      .values({
+        projectId: notesProject.id,
+        content,
+        sourceType: "text",
+        tags: ["note"],
+      })
+      .returning();
+
+    res.status(201).json({ update, project: null, isNew: false, isNote: true });
+    return;
+  }
+
+  // ── Project match or creation ─────────────────────────────────────────────
   let project;
   let isNew = false;
 
@@ -396,7 +437,7 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
     .set({ lastActivityAt: new Date(), status: "active", updatedAt: new Date() })
     .where(eq(projectsTable.id, project.id));
 
-  res.status(201).json({ update, project, isNew });
+  res.status(201).json({ update, project, isNew, isNote: false });
 });
 
 // GET /dashboard

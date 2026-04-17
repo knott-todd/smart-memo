@@ -11,80 +11,83 @@ export interface ClassificationResult {
   projectId: number | null;
   newProjectTitle: string | null;
   newProjectDescription: string | null;
+  isNote: boolean; // true = save as a loose note, don't touch projects
 }
 
 export async function classifyInput(
   content: string,
   existingProjects: ExistingProject[]
 ): Promise<ClassificationResult> {
-  if (existingProjects.length === 0) {
-    const title = await inferProjectTitle(content);
-    return { projectId: null, newProjectTitle: title.title, newProjectDescription: title.description };
-  }
+  const projectList =
+    existingProjects.length > 0
+      ? existingProjects
+          .map((p) => `- ID ${p.id}: "${p.title}"${p.description ? ` — ${p.description}` : ""}`)
+          .join("\n")
+      : "(none)";
 
-  const projectList = existingProjects
-    .map((p) => `- ID ${p.id}: "${p.title}"${p.description ? ` — ${p.description}` : ""}`)
-    .join("\n");
-
-  const prompt = `You are a project classifier for a productivity app called Continuity. A user has typed a raw thought, update, or note. Determine which existing project this belongs to, or decide it's a new project entirely.
+  const prompt = `You are a project classifier for a productivity app. A user typed a raw thought, update, or note.
 
 Existing projects:
 ${projectList}
 
 New input: "${content}"
 
+Decide ONE of three outcomes:
+1. MATCH — this clearly belongs to an existing project
+2. NEW — this introduces a genuinely new project worth tracking
+3. NOTE — this is a loose thought, random idea, reminder, or personal note that doesn't warrant its own project
+
 Rules:
+- Use NOTE liberally for journal entries, reminders, random thoughts, single-line observations, or anything that doesn't have a clear ongoing scope
 - Match to an existing project only if the content clearly relates to it
-- If the content introduces something genuinely new or unrelated to all existing projects, it's a new project
-- If new, infer a concise project title (3-5 words) and a brief one-sentence description
+- Create a new project only when the input describes something with ongoing scope (e.g. building a product, running a campaign, a multi-step task)
 - Do NOT create duplicate projects
+- If NEW: infer a concise title (3-5 words) and a brief one-sentence description
 
 Return JSON only, no other text:
-{ "projectId": <number or null>, "newProjectTitle": <string or null>, "newProjectDescription": <string or null> }`;
-
-  const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
-    max_completion_tokens: 256,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const raw = response.choices[0]?.message?.content ?? "";
+{ "outcome": "match" | "new" | "note", "projectId": <number or null>, "newProjectTitle": <string or null>, "newProjectDescription": <string or null> }`;
 
   try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_completion_tokens: 256,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const raw = response.choices[0]?.message?.content ?? "";
+
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON found");
-    const parsed = JSON.parse(jsonMatch[0]) as ClassificationResult;
+
+    const parsed = JSON.parse(jsonMatch[0]) as {
+      outcome: "match" | "new" | "note";
+      projectId?: number | null;
+      newProjectTitle?: string | null;
+      newProjectDescription?: string | null;
+    };
+
+    if (parsed.outcome === "note") {
+      return { projectId: null, newProjectTitle: null, newProjectDescription: null, isNote: true };
+    }
+
+    if (parsed.outcome === "match" && typeof parsed.projectId === "number") {
+      return {
+        projectId: parsed.projectId,
+        newProjectTitle: null,
+        newProjectDescription: null,
+        isNote: false,
+      };
+    }
+
+    // outcome === "new"
     return {
-      projectId: typeof parsed.projectId === "number" ? parsed.projectId : null,
-      newProjectTitle: parsed.newProjectTitle ?? null,
+      projectId: null,
+      newProjectTitle: parsed.newProjectTitle ?? "Untitled Project",
       newProjectDescription: parsed.newProjectDescription ?? null,
+      isNote: false,
     };
   } catch (err) {
-    logger.error({ err, raw }, "Failed to parse classification JSON");
-    return { projectId: null, newProjectTitle: "Untitled Project", newProjectDescription: null };
-  }
-}
-
-async function inferProjectTitle(content: string): Promise<{ title: string; description: string }> {
-  const prompt = `A user typed this note into a productivity app: "${content}"
-
-Infer a short project title (3-5 words) and a one-sentence description for what this project is about.
-
-Return JSON only: { "title": "...", "description": "..." }`;
-
-  const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
-    max_completion_tokens: 128,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const raw = response.choices[0]?.message?.content ?? "";
-
-  try {
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("No JSON found");
-    return JSON.parse(jsonMatch[0]);
-  } catch {
-    return { title: "New Project", description: content.slice(0, 100) };
+    logger.error({ err }, "Failed to parse classification JSON — defaulting to note");
+    return { projectId: null, newProjectTitle: null, newProjectDescription: null, isNote: true };
   }
 }

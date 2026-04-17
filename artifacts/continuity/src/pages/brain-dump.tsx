@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Link } from "wouter";
-import { Send, Mic, MicOff, Loader2 } from "lucide-react";
+import { Send, Mic, MicOff, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useGetDashboard, getGetDashboardQueryKey } from "@workspace/api-client-react";
 import { AppHeader } from "@/components/app-header";
 
@@ -31,7 +31,12 @@ interface PendingEntry {
 interface ContextMenu {
   x: number;
   y: number;
-  entryId: number | string;
+  entryId: number;
+}
+
+interface EditState {
+  id: number;
+  content: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -65,16 +70,31 @@ async function postBrainDump(content: string) {
   }>;
 }
 
+async function patchUpdate(id: number, content: string) {
+  const res = await fetch(`${BASE}/api/updates/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content }),
+  });
+  if (!res.ok) throw new Error("Failed to edit");
+  return res.json();
+}
+
+async function deleteUpdate(id: number) {
+  const res = await fetch(`${BASE}/api/updates/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("Failed to delete");
+}
+
 function formatTime(date: Date | string) {
   return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function ActivityLog({ label }: { label: string }) {
   return (
-    <div className="flex items-center gap-2 my-2 px-1">
-      <span className="text-muted-foreground/20 text-[10px] tracking-widest select-none">───</span>
-      <span className="text-muted-foreground/35 text-[11px] font-mono">{label}</span>
-      <span className="text-muted-foreground/20 text-[10px] tracking-widest select-none">───</span>
+    <div className="flex items-center gap-2 my-1.5 px-1">
+      <span className="text-muted-foreground/20 text-[10px] tracking-widest select-none shrink-0">──</span>
+      <span className="text-muted-foreground/35 text-[11px] font-mono whitespace-nowrap">{label}</span>
+      <span className="text-muted-foreground/20 text-[10px] tracking-widest select-none shrink-0">──</span>
     </div>
   );
 }
@@ -88,13 +108,15 @@ export default function BrainDump() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null);
+  const [editState, setEditState] = useState<EditState | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
 
   const feedBottomRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const messageRefs = useRef<Map<number | string, HTMLDivElement>>(new Map());
+  const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: dashboard } = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey() } });
   const activeCount = (dashboard?.activeProjects ?? 0) + (dashboard?.coastingProjects ?? 0);
@@ -111,10 +133,19 @@ export default function BrainDump() {
   }, [history, pending]);
 
   useEffect(() => {
-    const handler = () => setContextMenu(null);
+    const handler = (e: MouseEvent) => {
+      if (contextMenu) setContextMenu(null);
+    };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
-  }, []);
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (editState && editInputRef.current) {
+      editInputRef.current.focus();
+      editInputRef.current.setSelectionRange(editState.content.length, editState.content.length);
+    }
+  }, [editState]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
 
@@ -175,14 +206,44 @@ export default function BrainDump() {
     }
   };
 
+  // ── Edit / Delete ─────────────────────────────────────────────────────────
+
+  const handleEdit = (entry: HistoricalEntry) => {
+    setContextMenu(null);
+    setEditState({ id: entry.id, content: entry.content });
+  };
+
+  const handleEditSave = async () => {
+    if (!editState) return;
+    try {
+      await patchUpdate(editState.id, editState.content.trim());
+      setHistory((prev) =>
+        prev.map((e) => (e.id === editState.id ? { ...e, content: editState.content.trim() } : e))
+      );
+    } catch {
+      // silent fail — keep local state unchanged
+    }
+    setEditState(null);
+  };
+
+  const handleDelete = async (id: number) => {
+    setContextMenu(null);
+    try {
+      await deleteUpdate(id);
+      setHistory((prev) => prev.filter((e) => e.id !== id));
+    } catch {
+      // silent
+    }
+  };
+
   // ── Mic / Web Speech API ──────────────────────────────────────────────────
 
   const toggleMic = useCallback(() => {
-    const SpeechRecognitionClass =
-      (window as Window & typeof globalThis).SpeechRecognition ||
-      (window as Window & typeof globalThis & { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
+    const SR =
+      (window as Window & { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition ||
+      (window as Window & { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
 
-    if (!SpeechRecognitionClass) {
+    if (!SR) {
       setMicError("Speech recognition not supported in this browser.");
       setTimeout(() => setMicError(null), 3000);
       return;
@@ -194,73 +255,43 @@ export default function BrainDump() {
       return;
     }
 
-    const recognition = new SpeechRecognitionClass();
+    const recognition = new SR();
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
 
-    recognition.onstart = () => {
-      setIsListening(true);
-      setMicError(null);
-    };
-
+    recognition.onstart = () => { setIsListening(true); setMicError(null); };
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let transcript = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-      setInput(transcript);
+      let t = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) t += event.results[i][0].transcript;
+      setInput(t);
     };
-
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      if (event.error === "not-allowed") {
-        setMicError("Microphone access denied.");
-      } else if (event.error !== "aborted") {
-        setMicError("Mic error — please try again.");
-      }
+      if (event.error === "not-allowed") setMicError("Microphone access denied.");
+      else if (event.error !== "aborted") setMicError("Mic error — please try again.");
       setIsListening(false);
       setTimeout(() => setMicError(null), 3000);
     };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
+    recognition.onend = () => setIsListening(false);
 
     recognitionRef.current = recognition;
     recognition.start();
   }, [isListening]);
 
-  // ── Long-press context menu ───────────────────────────────────────────────
+  // ── Long-press / right-click context menu ─────────────────────────────────
 
-  const startLongPress = (
-    e: React.TouchEvent | React.MouseEvent,
-    id: number | string
-  ) => {
-    const clientX =
-      "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
-    const clientY =
-      "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+  const openContextMenu = (x: number, y: number, id: number) => {
+    setContextMenu({ x, y, entryId: id });
+  };
 
-    longPressTimer.current = setTimeout(() => {
-      setContextMenu({ x: clientX, y: clientY, entryId: id });
-    }, 500);
+  const startLongPress = (e: React.TouchEvent | React.MouseEvent, id: number) => {
+    const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = "touches" in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    longPressTimer.current = setTimeout(() => openContextMenu(clientX, clientY, id), 500);
   };
 
   const cancelLongPress = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-      longPressTimer.current = null;
-    }
-  };
-
-  const handleShowSource = (entryId: number | string) => {
-    setContextMenu(null);
-    const el = messageRefs.current.get(entryId);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.add("highlight-pulse");
-      setTimeout(() => el.classList.remove("highlight-pulse"), 1500);
-    }
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   };
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -275,10 +306,7 @@ export default function BrainDump() {
 
       {activeCount > 0 && isEmpty && (
         <div className="px-4 pt-3">
-          <Link
-            href="/projects"
-            className="inline-block text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
-          >
+          <Link href="/projects" className="inline-block text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors">
             You have {activeCount} active project{activeCount !== 1 ? "s" : ""}
           </Link>
         </div>
@@ -297,69 +325,82 @@ export default function BrainDump() {
           <div className="space-y-1">
             {history.map((entry) => (
               <div key={entry.id} className="space-y-1">
-                {/* Bubble — LEFT aligned */}
-                <div
-                  ref={(el) => {
-                    if (el) messageRefs.current.set(entry.id, el);
-                    else messageRefs.current.delete(entry.id);
-                  }}
-                  className="max-w-[85%] bg-card border border-border/40 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-foreground/90 leading-relaxed cursor-pointer select-none transition-colors hover:border-border/60"
-                  onMouseDown={(e) => startLongPress(e, entry.id)}
-                  onMouseUp={cancelLongPress}
-                  onMouseLeave={cancelLongPress}
-                  onTouchStart={(e) => startLongPress(e, entry.id)}
-                  onTouchEnd={cancelLongPress}
-                  onTouchCancel={cancelLongPress}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, entryId: entry.id });
-                  }}
-                >
-                  {entry.content}
+                {/* Bubble — RIGHT aligned (user message) */}
+                <div className="flex justify-end">
+                  {editState?.id === entry.id ? (
+                    <div className="max-w-[85%] w-full bg-card border border-primary/30 rounded-2xl rounded-br-sm px-4 py-3">
+                      <textarea
+                        ref={editInputRef}
+                        value={editState.content}
+                        onChange={(e) => setEditState({ ...editState, content: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
+                          if (e.key === "Escape") setEditState(null);
+                        }}
+                        rows={3}
+                        className="w-full bg-transparent text-sm text-foreground/90 leading-relaxed outline-none resize-none"
+                      />
+                      <div className="flex justify-end gap-2 mt-2">
+                        <button onClick={() => setEditState(null)} className="text-xs text-muted-foreground/50 hover:text-muted-foreground">Cancel</button>
+                        <button onClick={handleEditSave} className="text-xs text-primary hover:opacity-80">Save</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      ref={(el) => { if (el) messageRefs.current.set(entry.id, el); else messageRefs.current.delete(entry.id); }}
+                      className="max-w-[85%] bg-primary/10 border border-primary/20 rounded-2xl rounded-br-sm px-4 py-3 text-sm text-foreground/90 leading-relaxed cursor-pointer select-none transition-colors hover:border-primary/30"
+                      onMouseDown={(e) => { if (e.button === 0) startLongPress(e, entry.id); }}
+                      onMouseUp={cancelLongPress}
+                      onMouseLeave={cancelLongPress}
+                      onTouchStart={(e) => startLongPress(e, entry.id)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
+                      onContextMenu={(e) => { e.preventDefault(); openContextMenu(e.clientX, e.clientY, entry.id); }}
+                    >
+                      {entry.content}
+                    </div>
+                  )}
                 </div>
 
                 {/* Activity log */}
-                {entry.isNote ? (
-                  <ActivityLog label={`Note saved · ${formatTime(entry.createdAt)}`} />
-                ) : entry.projectTitle ? (
-                  <ActivityLog label={`${entry.projectTitle} · ${formatTime(entry.createdAt)}`} />
-                ) : null}
+                <div className="flex justify-end pr-1">
+                  {entry.isNote ? (
+                    <ActivityLog label={`── Note saved · ${formatTime(entry.createdAt)} ──`} />
+                  ) : entry.projectTitle ? (
+                    <ActivityLog label={`── Logged to: ${entry.projectTitle} · ${formatTime(entry.createdAt)} ──`} />
+                  ) : null}
+                </div>
               </div>
             ))}
 
             {pending.map((entry) => (
               <div key={entry.tempId} className="space-y-1">
-                <div
-                  ref={(el) => {
-                    if (el) messageRefs.current.set(entry.tempId, el);
-                    else messageRefs.current.delete(entry.tempId);
-                  }}
-                  className="max-w-[85%] bg-card border border-border/40 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-foreground/90 leading-relaxed opacity-60"
-                >
-                  {entry.content}
-                </div>
-
-                {entry.resolved ? (
-                  entry.resolved.isNote ? (
-                    <ActivityLog label={`Note saved · ${formatTime(entry.timestamp)}`} />
-                  ) : entry.resolved.projectTitle ? (
-                    <ActivityLog
-                      label={
-                        entry.resolved.isNew
-                          ? `Project Created: ${entry.resolved.projectTitle} · ${formatTime(entry.timestamp)}`
-                          : `Project Updated: ${entry.resolved.projectTitle} · ${formatTime(entry.timestamp)}`
-                      }
-                    />
-                  ) : null
-                ) : entry.failed ? (
-                  <ActivityLog label="Failed to save" />
-                ) : (
-                  <div className="flex items-center gap-2 my-2 px-1">
-                    <span className="text-muted-foreground/20 text-[10px] tracking-widest">───</span>
-                    <div className="h-2 w-24 bg-border/20 rounded-full animate-pulse" />
-                    <span className="text-muted-foreground/20 text-[10px] tracking-widest">───</span>
+                <div className="flex justify-end">
+                  <div className="max-w-[85%] bg-primary/10 border border-primary/20 rounded-2xl rounded-br-sm px-4 py-3 text-sm text-foreground/90 leading-relaxed opacity-50">
+                    {entry.content}
                   </div>
-                )}
+                </div>
+                <div className="flex justify-end pr-1">
+                  {entry.resolved ? (
+                    entry.resolved.isNote ? (
+                      <ActivityLog label={`── Note saved · ${formatTime(entry.timestamp)} ──`} />
+                    ) : entry.resolved.projectTitle ? (
+                      <ActivityLog
+                        label={entry.resolved.isNew
+                          ? `── New project: ${entry.resolved.projectTitle} · ${formatTime(entry.timestamp)} ──`
+                          : `── Logged to: ${entry.resolved.projectTitle} · ${formatTime(entry.timestamp)} ──`}
+                      />
+                    ) : null
+                  ) : entry.failed ? (
+                    <ActivityLog label="── Failed to save ──" />
+                  ) : (
+                    <div className="flex items-center gap-2 my-1.5 px-1">
+                      <span className="text-muted-foreground/20 text-[10px]">──</span>
+                      <div className="h-2 w-28 bg-border/20 rounded-full animate-pulse" />
+                      <span className="text-muted-foreground/20 text-[10px]">──</span>
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -368,20 +409,32 @@ export default function BrainDump() {
       </div>
 
       {/* Context menu */}
-      {contextMenu && (
-        <div
-          className="fixed z-50 bg-card border border-border/60 rounded-xl shadow-xl py-1 min-w-[140px] animate-in fade-in zoom-in-95 duration-150"
-          style={{ left: contextMenu.x, top: contextMenu.y, transform: "translateY(-100%)" }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button
-            className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted hover:text-foreground transition-colors"
-            onClick={() => handleShowSource(contextMenu.entryId)}
+      {contextMenu && (() => {
+        const entry = history.find((e) => e.id === contextMenu.entryId);
+        return (
+          <div
+            className="fixed z-50 bg-card border border-border/60 rounded-xl shadow-xl py-1 min-w-[140px] animate-in fade-in zoom-in-95 duration-150"
+            style={{
+              left: Math.min(contextMenu.x, window.innerWidth - 160),
+              top: Math.min(contextMenu.y, window.innerHeight - 100),
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
-            Show source
-          </button>
-        </div>
-      )}
+            <button
+              className="w-full text-left px-4 py-2.5 text-sm text-foreground/80 hover:bg-muted hover:text-foreground transition-colors flex items-center gap-2"
+              onClick={() => entry && handleEdit(entry)}
+            >
+              <Pencil className="w-3 h-3 opacity-50" /> Edit
+            </button>
+            <button
+              className="w-full text-left px-4 py-2.5 text-sm text-destructive/80 hover:bg-muted hover:text-destructive transition-colors flex items-center gap-2"
+              onClick={() => handleDelete(contextMenu.entryId)}
+            >
+              <Trash2 className="w-3 h-3 opacity-50" /> Delete
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Mic error toast */}
       {micError && (
@@ -390,19 +443,15 @@ export default function BrainDump() {
         </div>
       )}
 
-      {/* Input bar */}
+      {/* Input bar: [Send] [input field] [Mic] */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/95 to-transparent pt-8 pb-4 px-4">
         <div className="flex items-center gap-3 bg-card border border-border rounded-2xl px-4 py-3 focus-within:border-border/60 transition-colors">
           <button
-            className={`shrink-0 transition-colors ${
-              isListening
-                ? "text-primary animate-pulse"
-                : "text-muted-foreground/30 hover:text-muted-foreground"
-            }`}
-            onClick={toggleMic}
-            title={isListening ? "Stop listening" : "Speak"}
+            onClick={handleSubmit}
+            disabled={!input.trim() || submitting}
+            className="shrink-0 text-muted-foreground/40 hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
           >
-            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
           <input
             value={input}
@@ -413,15 +462,11 @@ export default function BrainDump() {
             autoFocus
           />
           <button
-            onClick={handleSubmit}
-            disabled={!input.trim() || submitting}
-            className="shrink-0 text-muted-foreground/40 hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            className={`shrink-0 transition-colors ${isListening ? "text-primary animate-pulse" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
+            onClick={toggleMic}
+            title={isListening ? "Stop listening" : "Speak"}
           >
-            {submitting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
+            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
           </button>
         </div>
       </div>
@@ -432,9 +477,7 @@ export default function BrainDump() {
           50%  { box-shadow: 0 0 0 6px hsl(var(--primary) / 0.15); }
           100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
         }
-        .highlight-pulse {
-          animation: highlight-pulse 1.2s ease-out;
-        }
+        .highlight-pulse { animation: highlight-pulse 1.2s ease-out; }
       `}</style>
     </div>
   );

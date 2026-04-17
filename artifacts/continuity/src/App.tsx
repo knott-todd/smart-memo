@@ -36,7 +36,7 @@ function AppRoutes() {
   if (onboarded === null) return null;
 
   if (!onboarded) {
-    return <Onboarding />;
+    return <Onboarding onComplete={() => setOnboarded(true)} />;
   }
 
   return (

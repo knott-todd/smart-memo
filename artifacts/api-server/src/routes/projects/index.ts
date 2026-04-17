@@ -329,6 +329,25 @@ router.post("/projects/:id/worksheet", async (req, res): Promise<void> => {
   res.status(201).json(update);
 });
 
+// GET /updates — all updates across all projects, with project info
+router.get("/updates", async (_req, res): Promise<void> => {
+  const rows = await db
+    .select({
+      id: updatesTable.id,
+      content: updatesTable.content,
+      sourceType: updatesTable.sourceType,
+      tags: updatesTable.tags,
+      createdAt: updatesTable.createdAt,
+      projectId: projectsTable.id,
+      projectTitle: projectsTable.title,
+    })
+    .from(updatesTable)
+    .innerJoin(projectsTable, eq(updatesTable.projectId, projectsTable.id))
+    .orderBy(updatesTable.createdAt);
+
+  res.json(rows);
+});
+
 // POST /brain-dump — global input with AI project classification
 router.post("/brain-dump", async (req, res): Promise<void> => {
   const parsed = z.object({ content: z.string().min(1) }).safeParse(req.body);

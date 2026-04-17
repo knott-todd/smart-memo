@@ -1,0 +1,253 @@
+Good—this tightens the core loop and removes a major ambiguity (where raw data lives). I’ll integrate your edits cleanly and resolve the remaining vague parts so this is buildable without interpretation.
+
+⸻
+
+Continuity — Project Page (Revised Spec)
+
+1. Two Modes (Hard Toggle)
+
+Modes:
+
+* Pretty View (default)
+* Project Chat View (raw inputs only)
+
+Toggle control:
+
+* Top right icon:
+    * Pretty view → chat icon
+    * Chat view → eye icon
+
+Behavior:
+
+* Instant toggle (no loading screen)
+* State preserved (scroll position remembered per mode)
+
+⸻
+
+2. Pretty View (Primary Surface)
+
+Design constraints:
+
+* Low contrast, not pure white
+* No bright accent spam
+* Generous spacing (padding > content density)
+* Typography carries hierarchy (not color)
+
+You’re aiming closer to Claude AI than Notion.
+
+⸻
+
+3. Above the Fold (Locked Layout)
+
+Order:
+
+1. Project Title
+2. Briefing Block
+    * Last Known State
+    * Confidence Label
+    * Blockers
+    * Next Actions (max 3)
+3. (Optional subtle divider)
+
+Constraints:
+
+* No scrolling required to see all 4 sections
+* Each section = max ~2 lines
+* No cards-within-cards clutter
+
+⸻
+
+4. Below the Fold (Dynamic Document)
+
+This is your “intelligent project document”—but we need to constrain it.
+
+Sections:
+
+A. Context Summary
+
+* Clean paragraph or grouped bullets
+* Synthesized, not raw
+
+B. Key Insights
+
+* Bullet points only
+* Tagged implicitly (decisions, ideas, failures)
+
+C. Artifacts (Future-ready placeholder)
+
+* Images, diagrams, etc.
+* Rendered cleanly, not dumped
+
+⸻
+
+5. Source Traceability (Important Differentiator)
+
+Interaction:
+
+* Long press ANY piece of information
+
+Context menu:
+
+* “Show source”
+
+Result:
+
+→ Opens Project Chat View
+→ Auto-scroll to originating message
+→ Highlight message briefly
+
+⸻
+
+6. Project Chat View (Raw Input Layer)
+
+Same UI as Brain Dump BUT:
+
+* Filtered to this project only
+
+Includes:
+
+* Voice notes (waveform + playback)
+* Transcriptions
+* Images
+* Text
+
+Differences from Brain Dump:
+
+* No AI tags shown here (clean log)
+* This is strictly source-of-truth
+
+⸻
+
+7. Bidirectional Sync (Critical Rule)
+
+Rule:
+
+There is no separate “pretty data” vs “chat data”
+
+Everything maps to source inputs.
+
+⸻
+
+Case 1: Edit in Pretty View
+
+* User edits a sentence in summary
+    → System finds linked source message
+    → Updates that message
+    → Chat shows “edited” label
+
+⸻
+
+Case 2: Edit in Chat View
+
+* User edits message
+    → All derived sections update immediately
+
+⸻
+
+Case 3: Copy → Edit → Paste (your edge case)
+
+System behavior:
+
+* Detect high similarity (≥ threshold)
+* Link new message to old message
+* Reassign derived data to new message
+* Old message becomes “superseded” (not deleted)
+
+⸻
+
+8. Edit Representation (Chat View)
+
+* Edited messages show:
+    * “Edited” label (like WhatsApp)
+* No version history UI in Phase 1
+* Just latest state
+
+⸻
+
+9. Data Integrity Model (What you’re actually building)
+
+You’ve implicitly defined this—making it explicit:
+
+* Each insight / summary line → linked to 1+ source messages
+* Each message → immutable origin, mutable current version
+* Derived content → always traceable
+
+This is why your product is defensible later
+
+⸻
+
+10. Visual System Rules (Non-negotiable)
+
+* No bright white backgrounds
+* No more than 1–2 accent colors
+* Spacing > borders
+* No heavy card stacking
+* Typography hierarchy:
+    * Title
+    * Section headers
+    * Body
+    * Metadata (confidence, timestamps)
+
+⸻
+
+11. What’s Still Undefined (You flagged this correctly)
+
+“Mobile-friendly representations for all data”
+
+Right now this is dangerous because it’s open-ended.
+
+You need a rendering ruleset, or AI will improvise.
+
+⸻
+
+12. Pin (Next Spec You Must Write)
+
+Define:
+
+Input → Representation mapping
+
+Examples:
+
+* Voice note → audio + transcript
+* Brainstorm → bullet list
+* Process description → steps
+* Comparison → table
+* Visual artifact → image block
+
+⸻
+
+Without this, “intelligent document” becomes:
+
+* messy
+* inconsistent
+* AI-designed (which you don’t want)
+
+⸻
+
+Blunt assessment
+
+This update fixes:
+
+* Data visibility (clean separation)
+* Trust (source traceability)
+* UX clutter (huge improvement)
+
+Your biggest remaining risk is:
+
+“make it visual” without rules
+
+That’s exactly how products become inconsistent.
+
+⸻
+
+Next step (don’t skip this)
+
+Define a Rendering Rules Table:
+
+Input Pattern	Output Format	Example
+
+Keep it tight (10–15 rules max).
+
+⸻
+
+Also—yes, you need to pick a color palette soon. If you don’t, every generated UI will drift.

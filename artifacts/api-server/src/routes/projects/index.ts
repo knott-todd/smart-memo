@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc, count } from "drizzle-orm";
+import { z } from "zod";
 import { db, projectsTable, updatesTable, briefingsTable } from "@workspace/db";
 import {
   CreateProjectBody,
@@ -16,6 +17,7 @@ import {
   SubmitWorksheetParams,
 } from "@workspace/api-zod";
 import { generateBriefing } from "../../lib/briefing-engine";
+import { classifyInput } from "../../lib/classifier";
 
 const router: IRouter = Router();
 
@@ -325,6 +327,57 @@ router.post("/projects/:id/worksheet", async (req, res): Promise<void> => {
     .where(eq(projectsTable.id, params.data.id));
 
   res.status(201).json(update);
+});
+
+// POST /brain-dump — global input with AI project classification
+router.post("/brain-dump", async (req, res): Promise<void> => {
+  const parsed = z.object({ content: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Content required" });
+    return;
+  }
+
+  const { content } = parsed.data;
+  const existingProjects = await db.select().from(projectsTable).orderBy(desc(projectsTable.updatedAt));
+
+  const classification = await classifyInput(content, existingProjects);
+
+  let project;
+  let isNew = false;
+
+  if (classification.projectId) {
+    const found = existingProjects.find((p) => p.id === classification.projectId);
+    if (found) project = found;
+  }
+
+  if (!project) {
+    isNew = true;
+    [project] = await db
+      .insert(projectsTable)
+      .values({
+        title: classification.newProjectTitle ?? "Untitled Project",
+        description: classification.newProjectDescription ?? "",
+        projectType: "other",
+      })
+      .returning();
+  }
+
+  const [update] = await db
+    .insert(updatesTable)
+    .values({
+      projectId: project.id,
+      content,
+      sourceType: "text",
+      tags: [],
+    })
+    .returning();
+
+  await db
+    .update(projectsTable)
+    .set({ lastActivityAt: new Date(), status: "active", updatedAt: new Date() })
+    .where(eq(projectsTable.id, project.id));
+
+  res.status(201).json({ update, project, isNew });
 });
 
 // GET /dashboard

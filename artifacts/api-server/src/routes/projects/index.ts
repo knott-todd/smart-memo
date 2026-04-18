@@ -372,7 +372,23 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
   const allProjects = await db.select().from(projectsTable).orderBy(desc(projectsTable.updatedAt));
   const existingProjects = allProjects.filter((p) => p.title !== "__notes__");
 
-  const classification = await classifyInput(content, existingProjects);
+  // Fetch last 5 updates across all projects for context
+  const recentUpdates = await db
+    .select({
+      content: updatesTable.content,
+      projectTitle: projectsTable.title,
+    })
+    .from(updatesTable)
+    .innerJoin(projectsTable, eq(updatesTable.projectId, projectsTable.id))
+    .where(eq(projectsTable.title, projectsTable.title)) // all projects
+    .orderBy(desc(updatesTable.createdAt))
+    .limit(5);
+
+  const recentHistory = recentUpdates
+    .filter((u) => u.projectTitle !== "__notes__")
+    .map((u) => ({ content: u.content, projectTitle: u.projectTitle }));
+
+  const classification = await classifyInput(content, existingProjects, recentHistory);
 
   // ── Note: save without attaching to any real project ──────────────────────
   if (classification.isNote) {

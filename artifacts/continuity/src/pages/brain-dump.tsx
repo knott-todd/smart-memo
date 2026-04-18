@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Send, Mic, MicOff, Loader2, Pencil, Trash2 } from "lucide-react";
-import { useGetDashboard, getGetDashboardQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { getListProjectsQueryKey } from "@workspace/api-client-react";
 import { AppHeader } from "@/components/app-header";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -13,6 +14,7 @@ interface HistoricalEntry {
   projectId: number | null;
   projectTitle: string | null;
   isNote: boolean;
+  isNew?: boolean;
 }
 
 interface PendingEntry {
@@ -39,7 +41,7 @@ interface EditState {
   content: string;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -89,17 +91,91 @@ function formatTime(date: Date | string) {
   return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function ActivityLog({ label, href }: { label: string; href?: string }) {
+// ─── Activity Log Component ───────────────────────────────────────────────────
+// Desktop: floats in left margin aligned to bubble
+// Mobile: inline below bubble, smaller + lighter
+
+interface ActivityLogProps {
+  isNote: boolean;
+  isNew?: boolean;
+  projectTitle: string | null;
+  projectId: number | null;
+  time: string;
+  failed?: boolean;
+  pending?: boolean;
+}
+
+function ActivityLog({ isNote, isNew, projectTitle, projectId, time, failed, pending }: ActivityLogProps) {
   const [, setLocation] = useLocation();
+
+  const handleClick = () => {
+    if (projectId) setLocation(`/projects/${projectId}`);
+  };
+
+  if (pending) {
+    return (
+      <>
+        {/* Desktop: left margin */}
+        <div className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 items-center pr-3 pointer-events-none"
+          style={{ right: "calc(100% - 0px)", whiteSpace: "nowrap" }}>
+          <div className="h-2 w-20 bg-border/15 rounded-full animate-pulse" />
+        </div>
+        {/* Mobile: inline */}
+        <div className="md:hidden flex justify-end mt-0.5">
+          <div className="h-1.5 w-16 bg-border/15 rounded-full animate-pulse" />
+        </div>
+      </>
+    );
+  }
+
+  if (failed) {
+    return (
+      <>
+        <div className="hidden md:block absolute text-[10px] text-destructive/40 font-mono"
+          style={{ right: "calc(100% + 8px)", top: "50%", transform: "translateY(-50%)", whiteSpace: "nowrap" }}>
+          Failed to save
+        </div>
+        <div className="md:hidden flex justify-end mt-0.5">
+          <span className="text-[9px] text-destructive/40 font-mono">Failed to save</span>
+        </div>
+      </>
+    );
+  }
+
+  let label: React.ReactNode;
+  const isClickable = !!projectId;
+
+  if (isNote) {
+    label = <span className="text-muted-foreground/30">Note saved · {time}</span>;
+  } else if (projectTitle) {
+    const prefix = isNew ? "New project: " : "Logged to: ";
+    label = (
+      <span className={isClickable ? "text-muted-foreground/40 cursor-pointer hover:text-muted-foreground/60 transition-colors" : "text-muted-foreground/30"} onClick={isClickable ? handleClick : undefined}>
+        {prefix}<strong className="font-semibold">{projectTitle}</strong> · {time}
+      </span>
+    );
+  } else {
+    return null;
+  }
+
   return (
-    <div
-      className={`flex items-center gap-2 my-1.5 px-1 ${href ? "cursor-pointer" : ""}`}
-      onClick={href ? () => setLocation(href) : undefined}
-    >
-      <span className="text-muted-foreground/20 text-[10px] tracking-widest select-none shrink-0">──</span>
-      <span className={`text-[11px] font-mono whitespace-nowrap ${href ? "text-muted-foreground/50 hover:text-muted-foreground/70" : "text-muted-foreground/35"}`}>{label}</span>
-      <span className="text-muted-foreground/20 text-[10px] tracking-widest select-none shrink-0">──</span>
-    </div>
+    <>
+      {/* Desktop: absolutely positioned in left margin */}
+      <div className="hidden md:block absolute text-[10px] font-mono select-none"
+        style={{ right: "calc(100% + 12px)", top: "50%", transform: "translateY(-50%)", whiteSpace: "nowrap" }}>
+        {label}
+      </div>
+      {/* Mobile: inline below bubble */}
+      <div className="md:hidden flex justify-end mt-0.5 pr-0.5">
+        <span className="text-[9px] font-mono text-muted-foreground/30 select-none">
+          {isNote ? `Note · ${time}` : projectTitle ? (
+            <span className={isClickable ? "cursor-pointer" : ""} onClick={isClickable ? handleClick : undefined}>
+              {isNew ? "New: " : ""}<strong>{projectTitle}</strong> · {time}
+            </span>
+          ) : null}
+        </span>
+      </div>
+    </>
   );
 }
 
@@ -121,11 +197,7 @@ export default function BrainDump() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const editInputRef = useRef<HTMLTextAreaElement>(null);
-
-  const { data: dashboard } = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey() } });
-
-  // suppress unused dashboard warning — kept for future nudge logic
-  void dashboard;
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     fetchAllUpdates().then((data) => {
@@ -139,9 +211,7 @@ export default function BrainDump() {
   }, [history, pending]);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (contextMenu) setContextMenu(null);
-    };
+    const handler = () => { if (contextMenu) setContextMenu(null); };
     document.addEventListener("click", handler);
     return () => document.removeEventListener("click", handler);
   }, [contextMenu]);
@@ -173,6 +243,7 @@ export default function BrainDump() {
         projectId: result.project?.id ?? null,
         projectTitle: result.project?.title ?? null,
         isNote: result.isNote ?? false,
+        isNew: result.isNew,
       };
       setHistory((prev) => [...prev, newEntry]);
       setPending((prev) =>
@@ -190,6 +261,8 @@ export default function BrainDump() {
             : e
         )
       );
+      // Invalidate projects list so sidebar recents update
+      queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
       setTimeout(() => {
         setPending((prev) => prev.filter((e) => e.tempId !== tempId));
       }, 2500);
@@ -206,10 +279,7 @@ export default function BrainDump() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      handleSubmit();
-    }
+    if (e.key === "Enter") { e.preventDefault(); handleSubmit(); }
   };
 
   // ── Edit / Delete ─────────────────────────────────────────────────────────
@@ -226,9 +296,7 @@ export default function BrainDump() {
       setHistory((prev) =>
         prev.map((e) => (e.id === editState.id ? { ...e, content: editState.content.trim() } : e))
       );
-    } catch {
-      // silent fail — keep local state unchanged
-    }
+    } catch { /* silent */ }
     setEditState(null);
   };
 
@@ -237,35 +305,23 @@ export default function BrainDump() {
     try {
       await deleteUpdate(id);
       setHistory((prev) => prev.filter((e) => e.id !== id));
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   };
 
-  // ── Mic / Web Speech API ──────────────────────────────────────────────────
+  // ── Mic ───────────────────────────────────────────────────────────────────
 
   const toggleMic = useCallback(() => {
     const SR =
       (window as Window & { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition ||
       (window as Window & { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition;
 
-    if (!SR) {
-      setMicError("Speech recognition not supported in this browser.");
-      setTimeout(() => setMicError(null), 3000);
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
+    if (!SR) { setMicError("Speech recognition not supported."); setTimeout(() => setMicError(null), 3000); return; }
+    if (isListening) { recognitionRef.current?.stop(); setIsListening(false); return; }
 
     const recognition = new SR();
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-
     recognition.onstart = () => { setIsListening(true); setMicError(null); };
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       let t = "";
@@ -279,16 +335,13 @@ export default function BrainDump() {
       setTimeout(() => setMicError(null), 3000);
     };
     recognition.onend = () => setIsListening(false);
-
     recognitionRef.current = recognition;
     recognition.start();
   }, [isListening]);
 
-  // ── Long-press / right-click context menu ─────────────────────────────────
+  // ── Context menu ──────────────────────────────────────────────────────────
 
-  const openContextMenu = (x: number, y: number, id: number) => {
-    setContextMenu({ x, y, entryId: id });
-  };
+  const openContextMenu = (x: number, y: number, id: number) => setContextMenu({ x, y, entryId: id });
 
   const startLongPress = (e: React.TouchEvent | React.MouseEvent, id: number) => {
     const clientX = "touches" in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
@@ -300,8 +353,6 @@ export default function BrainDump() {
     if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
   };
 
-  // ── Derived ───────────────────────────────────────────────────────────────
-
   const isEmpty = !loading && history.length === 0 && pending.length === 0;
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -310,98 +361,92 @@ export default function BrainDump() {
     <div className="flex flex-col h-screen bg-background" onClick={() => setContextMenu(null)}>
       <AppHeader title="Brain Dump" />
 
-      {/* Feed */}
-      <div className="flex-1 overflow-y-auto px-4 pb-32 pt-4">
+      <div className="flex-1 overflow-y-auto pb-32 pt-3">
         {loading ? (
           <div className="flex items-center justify-center pt-20">
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground/30" />
           </div>
         ) : isEmpty ? (
           <div className="flex items-center justify-center h-full pb-24">
-            <p className="text-muted-foreground/30 text-sm font-serif italic">Drop anything…</p>
+            <p className="text-muted-foreground/25 text-sm font-serif italic">Drop anything…</p>
           </div>
         ) : (
-          <div className="space-y-1">
-            {history.map((entry) => (
-              <div key={entry.id} className="space-y-1">
-                {/* Bubble — RIGHT aligned (user message) */}
-                <div className="flex justify-end">
-                  {editState?.id === entry.id ? (
-                    <div className="max-w-[85%] w-full bg-card border border-primary/30 rounded-2xl rounded-br-sm px-4 py-3">
-                      <textarea
-                        ref={editInputRef}
-                        value={editState.content}
-                        onChange={(e) => setEditState({ ...editState, content: e.target.value })}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
-                          if (e.key === "Escape") setEditState(null);
-                        }}
-                        rows={3}
-                        className="w-full bg-transparent text-sm text-foreground/90 leading-relaxed outline-none resize-none"
-                      />
-                      <div className="flex justify-end gap-2 mt-2">
-                        <button onClick={() => setEditState(null)} className="text-xs text-muted-foreground/50 hover:text-muted-foreground">Cancel</button>
-                        <button onClick={handleEditSave} className="text-xs text-primary hover:opacity-80">Save</button>
+          /* Message column: on desktop cap width and centre, leaving left margin for logs */
+          <div className="mx-auto w-full max-w-2xl">
+            <div className="space-y-0.5 px-4 md:pl-48 md:pr-6">
+              {history.map((entry) => (
+                <div key={entry.id} className="relative">
+                  {/* Bubble */}
+                  <div className="flex justify-end">
+                    {editState?.id === entry.id ? (
+                      <div className="max-w-[80%] w-full bg-card border border-primary/30 rounded-xl rounded-br-sm px-3 py-2">
+                        <textarea
+                          ref={editInputRef}
+                          value={editState.content}
+                          onChange={(e) => setEditState({ ...editState, content: e.target.value })}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
+                            if (e.key === "Escape") setEditState(null);
+                          }}
+                          rows={2}
+                          className="w-full bg-transparent text-xs text-foreground/90 leading-relaxed outline-none resize-none"
+                        />
+                        <div className="flex justify-end gap-2 mt-1.5">
+                          <button onClick={() => setEditState(null)} className="text-xs text-muted-foreground/50 hover:text-muted-foreground">Cancel</button>
+                          <button onClick={handleEditSave} className="text-xs text-primary hover:opacity-80">Save</button>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div
-                      ref={(el) => { if (el) messageRefs.current.set(entry.id, el); else messageRefs.current.delete(entry.id); }}
-                      className="max-w-[85%] bg-primary/10 border border-primary/20 rounded-2xl rounded-br-sm px-4 py-3 text-sm text-foreground/90 leading-relaxed cursor-pointer select-none transition-colors hover:border-primary/30"
-                      onMouseDown={(e) => { if (e.button === 0) startLongPress(e, entry.id); }}
-                      onMouseUp={cancelLongPress}
-                      onMouseLeave={cancelLongPress}
-                      onTouchStart={(e) => startLongPress(e, entry.id)}
-                      onTouchEnd={cancelLongPress}
-                      onTouchCancel={cancelLongPress}
-                      onContextMenu={(e) => { e.preventDefault(); openContextMenu(e.clientX, e.clientY, entry.id); }}
-                    >
+                    ) : (
+                      <div
+                        ref={(el) => { if (el) messageRefs.current.set(entry.id, el); else messageRefs.current.delete(entry.id); }}
+                        className="max-w-[80%] bg-primary/10 border border-primary/15 rounded-xl rounded-br-sm px-3 py-1.5 text-xs text-foreground/85 leading-relaxed select-none transition-colors"
+                        onMouseDown={(e) => { if (e.button === 0) startLongPress(e, entry.id); }}
+                        onMouseUp={cancelLongPress}
+                        onMouseLeave={cancelLongPress}
+                        onTouchStart={(e) => startLongPress(e, entry.id)}
+                        onTouchEnd={cancelLongPress}
+                        onTouchCancel={cancelLongPress}
+                        onContextMenu={(e) => { e.preventDefault(); openContextMenu(e.clientX, e.clientY, entry.id); }}
+                      >
+                        {entry.content}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Activity log */}
+                  <ActivityLog
+                    isNote={entry.isNote}
+                    isNew={entry.isNew}
+                    projectTitle={entry.projectTitle}
+                    projectId={entry.projectId}
+                    time={formatTime(entry.createdAt)}
+                  />
+                </div>
+              ))}
+
+              {pending.map((entry) => (
+                <div key={entry.tempId} className="relative">
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] bg-primary/10 border border-primary/15 rounded-xl rounded-br-sm px-3 py-1.5 text-xs text-foreground/85 leading-relaxed opacity-40">
                       {entry.content}
                     </div>
-                  )}
-                </div>
-
-                {/* Activity log */}
-                <div className="flex justify-end pr-1">
-                  {entry.isNote ? (
-                    <ActivityLog label={`── Note saved · ${formatTime(entry.createdAt)} ──`} />
-                  ) : entry.projectTitle ? (
-                    <ActivityLog label={`── Logged to: ${entry.projectTitle} · ${formatTime(entry.createdAt)} ──`} />
-                  ) : null}
-                </div>
-              </div>
-            ))}
-
-            {pending.map((entry) => (
-              <div key={entry.tempId} className="space-y-1">
-                <div className="flex justify-end">
-                  <div className="max-w-[85%] bg-primary/10 border border-primary/20 rounded-2xl rounded-br-sm px-4 py-3 text-sm text-foreground/90 leading-relaxed opacity-50">
-                    {entry.content}
                   </div>
-                </div>
-                <div className="flex justify-end pr-1">
                   {entry.resolved ? (
-                    entry.resolved.isNote ? (
-                      <ActivityLog label={`── Note saved · ${formatTime(entry.timestamp)} ──`} />
-                    ) : entry.resolved.projectTitle ? (
-                      <ActivityLog
-                        label={entry.resolved.isNew
-                          ? `── New project: ${entry.resolved.projectTitle} · ${formatTime(entry.timestamp)} ──`
-                          : `── Logged to: ${entry.resolved.projectTitle} · ${formatTime(entry.timestamp)} ──`}
-                      />
-                    ) : null
+                    <ActivityLog
+                      isNote={entry.resolved.isNote}
+                      isNew={entry.resolved.isNew}
+                      projectTitle={entry.resolved.projectTitle}
+                      projectId={entry.resolved.projectId}
+                      time={formatTime(entry.timestamp)}
+                    />
                   ) : entry.failed ? (
-                    <ActivityLog label="── Failed to save ──" />
+                    <ActivityLog isNote={false} projectTitle={null} projectId={null} time="" failed />
                   ) : (
-                    <div className="flex items-center gap-2 my-1.5 px-1">
-                      <span className="text-muted-foreground/20 text-[10px]">──</span>
-                      <div className="h-2 w-28 bg-border/20 rounded-full animate-pulse" />
-                      <span className="text-muted-foreground/20 text-[10px]">──</span>
-                    </div>
+                    <ActivityLog isNote={false} projectTitle={null} projectId={null} time="" pending />
                   )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
         <div ref={feedBottomRef} />
@@ -435,49 +480,40 @@ export default function BrainDump() {
         );
       })()}
 
-      {/* Mic error toast */}
       {micError && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-destructive/90 text-destructive-foreground text-xs px-3 py-2 rounded-full shadow-lg animate-in fade-in duration-200">
           {micError}
         </div>
       )}
 
-      {/* Input bar: [input field] [Mic] [Send] */}
+      {/* Input bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/95 to-transparent pt-8 pb-4 px-4">
-        <div className="flex items-center gap-3 bg-card border border-border rounded-2xl px-4 py-3 focus-within:border-border/60 transition-colors">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={isListening ? "Listening…" : "Drop anything…"}
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/30 outline-none"
-            autoFocus
-          />
-          <button
-            className={`shrink-0 transition-colors ${isListening ? "text-primary animate-pulse" : "text-muted-foreground/30 hover:text-muted-foreground"}`}
-            onClick={toggleMic}
-            title={isListening ? "Stop listening" : "Speak"}
-          >
-            {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!input.trim() || submitting}
-            className="shrink-0 text-muted-foreground/40 hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
+        <div className="mx-auto max-w-2xl">
+          <div className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2 focus-within:border-border/60 transition-colors">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={isListening ? "Listening…" : "Drop anything…"}
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/25 outline-none"
+              autoFocus
+            />
+            <button
+              className={`shrink-0 transition-colors ${isListening ? "text-primary animate-pulse" : "text-muted-foreground/25 hover:text-muted-foreground"}`}
+              onClick={toggleMic}
+            >
+              {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!input.trim() || submitting}
+              className="shrink-0 text-muted-foreground/30 hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+            >
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
       </div>
-
-      <style>{`
-        @keyframes highlight-pulse {
-          0%   { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.5); }
-          50%  { box-shadow: 0 0 0 6px hsl(var(--primary) / 0.15); }
-          100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
-        }
-        .highlight-pulse { animation: highlight-pulse 1.2s ease-out; }
-      `}</style>
     </div>
   );
 }

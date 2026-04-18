@@ -43,29 +43,29 @@ export async function generateBriefing(
     ? `\n\nLast briefing (${new Date(lastBriefing.createdAt).toLocaleDateString()}):\n${lastBriefing.rawOutput}`
     : "";
 
-  const prompt = `You are Continuity — a patient, intelligent collaborator helping someone re-enter a project. Analyze the project updates and generate a precise, honest briefing. Be concise and direct. Never invent information not present in the updates.
+  const prompt = `You are Continuity — a tool that helps people re-enter projects. Your job is to summarize what the user has actually told you, nothing more.
 
 Project: "${projectTitle}"${stalenessNote}${lastBriefingSection}
 
-Recent updates:
-${updatesText || "(No updates yet — this is a new project)"}
+User inputs (chronological):
+${updatesText || "(No inputs yet)"}
 
 Generate a briefing in this exact JSON format:
 {
-  "lastKnownState": "1-2 sentence description of where the project stands right now, based only on available information",
-  "confidenceLevel": "high|medium|low (high = active updates in last 2 days, medium = 3-7 days or sparse updates, low = 8+ days or minimal information)",
-  "confidenceLabel": "Human-readable string explaining the confidence, e.g. 'Based on info from 3 days ago' or 'Based on your update today' or 'Last updated 2 weeks ago — may be stale'",
-  "blockers": ["array of specific blockers — only include if something is genuinely stuck. Omit this field entirely if nothing is blocked."],
-  "nextActions": ["concrete next actions the person should take — be specific and grounded in what they said. Use parent-child structure when actions share a goal, e.g. 'Get the world model working' as parent with sub-actions indented with a dash prefix like '- Stabilise plane fitting'"]
+  "lastKnownState": "1-2 sentences describing where the project stands based ONLY on what the user has written. If there is very little information, say so plainly.",
+  "confidenceLevel": "high|medium|low",
+  "confidenceLabel": "e.g. 'Based on your update today' or 'Based on info from 3 days ago' or 'Very little info captured yet'",
+  "blockers": ["Only include if the user explicitly mentioned something is blocked, stuck, or a problem. If they did not mention a blocker, omit this field entirely — do NOT infer or suggest blockers."],
+  "nextActions": ["Only include actions the user explicitly stated they need or want to do. Do NOT suggest, infer, or generate actions that the user did not mention. If no actions were stated, omit this field entirely."]
 }
 
-Rules:
-- Never invent content not present in the updates
-- Never use motivational language
-- Omit blockers entirely if nothing is blocked — do not include an empty array
-- Weight recent inputs over older ones
-- The confidenceLabel must be a natural sentence a human would say
-- nextActions must be grounded in what the user said, not generic suggestions
+Critical rules:
+- NEVER invent content. Every word in the output must be traceable to something the user actually wrote.
+- NEVER suggest blockers or next actions that the user did not explicitly state.
+- If the user has only written one or two things, the briefing will be short. That is correct behaviour.
+- Omit blockers and nextActions fields entirely if the user did not provide that information.
+- The confidenceLabel must reflect the actual recency and quantity of information provided.
+- Weight more recent inputs over older ones when there are contradictions.
 
 Return ONLY the JSON object, no additional text.`;
 

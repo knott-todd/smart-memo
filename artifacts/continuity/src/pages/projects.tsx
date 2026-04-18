@@ -95,19 +95,19 @@ export default function Projects() {
             )}
           </div>
         ) : (
-          <div className="px-4 pt-4 pb-8 space-y-3">
+          <div className="px-4 pt-4 pb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {filtered.map((project) => (
               <button
                 key={project.id}
                 onClick={() => setLocation(`/projects/${project.id}`)}
-                className="w-full text-left border border-border/40 rounded-xl px-5 active:scale-[0.99] transition-transform hover:border-border/70"
+                className="w-full text-left border border-border/40 rounded-xl px-5 active:scale-[0.99] transition-transform hover:border-border/70 cursor-pointer"
                 style={{
-                  minHeight: "calc(33vh - 24px)",
+                  minHeight: "clamp(100px, 20vh, 160px)",
                   display: "flex",
                   flexDirection: "column",
                   justifyContent: "space-between",
-                  paddingTop: "clamp(16px, 3vw, 24px)",
-                  paddingBottom: "clamp(16px, 3vw, 24px)",
+                  paddingTop: "clamp(14px, 2.5vw, 20px)",
+                  paddingBottom: "clamp(14px, 2.5vw, 20px)",
                 }}
               >
                 <div className="space-y-1.5">

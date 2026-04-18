@@ -33,10 +33,17 @@ export async function classifyInput(
           .join("\n")
       : "(none)";
 
-  const historyContext =
-    recentHistory.length > 0
-      ? "\nRecent conversation context (last few dumps, for reference):\n" +
-        recentHistory
+  const lastEntry = recentHistory[0];
+  const olderHistory = recentHistory.slice(1);
+
+  const immediateContext = lastEntry
+    ? `\nThe message sent immediately before this one: "${lastEntry.content}"${lastEntry.projectTitle ? ` [→ ${lastEntry.projectTitle}]` : ""}`
+    : "";
+
+  const olderContext =
+    olderHistory.length > 0
+      ? "\nEarlier context (less relevant):\n" +
+        olderHistory
           .map((e) => `- "${e.content}"${e.projectTitle ? ` [→ ${e.projectTitle}]` : ""}`)
           .join("\n")
       : "";
@@ -45,7 +52,8 @@ export async function classifyInput(
 
 Existing projects:
 ${projectList}
-${historyContext}
+${immediateContext}
+${olderContext}
 
 New input: "${content}"
 
@@ -58,9 +66,10 @@ Decide ONE of three outcomes:
 3. NOTE — this is a loose thought with no ongoing project scope: a one-off reminder, random observation, or idea that clearly doesn't connect to anything being built or worked on. Use NOTE sparingly.
 
 Rules:
-- Strongly prefer MATCH if there is any reasonable connection to an existing project, including via recent context
-- Use context clues: if recent dumps were about a project and this input feels like a continuation or correction, match it
-- Only use NOTE for things that clearly have no project scope
+- The message sent immediately before this one is the strongest context signal — if the new input feels like a continuation of it, match to the same project
+- If the input contains BOTH a project-related thought AND a personal/unrelated aside (e.g. "I need to plan the architecture. Also call John."), treat the whole message as MATCH to the relevant project — do not let the aside push it to NOTE
+- Strongly prefer MATCH if there is any reasonable connection to an existing project
+- Only use NOTE for things that clearly have no project scope whatsoever
 - If MATCH: also check whether the input reveals a better title or description for the project
 - If NEW: infer a concise title (2-5 words) and one-sentence description
 

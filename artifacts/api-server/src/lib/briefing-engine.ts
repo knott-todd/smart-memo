@@ -101,7 +101,7 @@ Return ONLY the JSON object. No extra text.`;
     { role: "user" as const, content: prompt },
   ];
 
-  console.log("BRIEFING PROMPT", JSON.stringify({ system: messages[0].content, user: messages[1].content }, null, 2));
+  logger.info({ system: messages[0].content, user: messages[1].content }, "BRIEFING PROMPT");
 
   const response = await openai.chat.completions.create({
     model: "gpt-5.3",
@@ -110,7 +110,7 @@ Return ONLY the JSON object. No extra text.`;
   });
 
   const raw = response.choices[0]?.message?.content ?? "";
-  console.log("BRIEFING RAW OUTPUT", raw);
+  logger.info({ raw }, "BRIEFING RAW OUTPUT");
 
   let parsed: Omit<BriefingOutput, "rawOutput">;
   try {

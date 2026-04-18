@@ -40,7 +40,7 @@ export async function generateBriefing(
       : "";
 
   const lastBriefingSection = lastBriefing
-    ? `\n\nLast briefing (${new Date(lastBriefing.createdAt).toLocaleDateString()}):\n${lastBriefing.rawOutput}`
+    ? `\n\nPrevious last-known state (${new Date(lastBriefing.createdAt).toLocaleDateString()}): ${lastBriefing.lastKnownState}`
     : "";
 
   const prompt = `You are Continuity — a tool that helps people re-enter projects.

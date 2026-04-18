@@ -30,8 +30,8 @@ interface Briefing {
   lastKnownState: string;
   confidenceLevel: "high" | "medium" | "low";
   confidenceLabel: string;
-  blockers: string[];
-  nextActions: string[];
+  blockers?: string[];
+  nextActions?: string[];
   createdAt: string;
 }
 

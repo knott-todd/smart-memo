@@ -5,8 +5,8 @@ export interface BriefingOutput {
   lastKnownState: string;
   confidenceLevel: "high" | "medium" | "low";
   confidenceLabel: string;
-  blockers: string[];
-  nextActions: string[];
+  blockers?: string[];
+  nextActions?: string[];
   rawOutput: string;
 }
 
@@ -131,7 +131,14 @@ Return ONLY the JSON object. No extra text.`;
   const response = await openai.chat.completions.create({
     model: "gpt-5.3",
     max_completion_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      {
+        role: "system",
+        content:
+          "You produce minimal JSON briefings. CRITICAL: Omit the 'blockers' field entirely unless the user explicitly used words like 'blocked', 'stuck', 'can't', 'issue', or 'problem'. Omit the 'nextActions' field entirely unless the user explicitly stated intent with phrases like 'I need to', 'I will', 'plan to', or 'next I'. Do not infer, suggest, or add anything not directly stated. When in doubt, output less.",
+      },
+      { role: "user", content: prompt },
+    ],
   });
 
   const raw = response.choices[0]?.message?.content ?? "";
@@ -158,8 +165,8 @@ Return ONLY the JSON object. No extra text.`;
       ? parsed.confidenceLevel
       : "low") as BriefingOutput["confidenceLevel"],
     confidenceLabel: parsed.confidenceLabel || `Based on info from ${daysSinceActivity != null ? `${daysSinceActivity} days ago` : "recently"}`,
-    blockers: Array.isArray(parsed.blockers) ? parsed.blockers : [],
-    nextActions: Array.isArray(parsed.nextActions) ? parsed.nextActions : [],
+    blockers: Array.isArray(parsed.blockers) ? parsed.blockers : undefined,
+    nextActions: Array.isArray(parsed.nextActions) ? parsed.nextActions : undefined,
     rawOutput: raw,
   };
 }

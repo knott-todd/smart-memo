@@ -92,20 +92,25 @@ WRONG output (do not do this — blockers and nextActions were invented, not sta
 
 Return ONLY the JSON object. No extra text.`;
 
+  const messages = [
+    {
+      role: "system" as const,
+      content:
+        "You produce minimal JSON briefings. CRITICAL: Omit the 'blockers' field entirely unless the user explicitly used words like 'blocked', 'stuck', 'can't', 'issue', or 'problem'. Omit the 'nextActions' field entirely unless the user explicitly stated intent with phrases like 'I need to', 'I will', 'plan to', or 'next I'. Do not infer, suggest, or add anything not directly stated. When in doubt, output less.",
+    },
+    { role: "user" as const, content: prompt },
+  ];
+
+  console.log("BRIEFING PROMPT", JSON.stringify({ system: messages[0].content, user: messages[1].content }, null, 2));
+
   const response = await openai.chat.completions.create({
     model: "gpt-5.3",
     max_completion_tokens: 1024,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You produce minimal JSON briefings. CRITICAL: Omit the 'blockers' field entirely unless the user explicitly used words like 'blocked', 'stuck', 'can't', 'issue', or 'problem'. Omit the 'nextActions' field entirely unless the user explicitly stated intent with phrases like 'I need to', 'I will', 'plan to', or 'next I'. Do not infer, suggest, or add anything not directly stated. When in doubt, output less.",
-      },
-      { role: "user", content: prompt },
-    ],
+    messages,
   });
 
   const raw = response.choices[0]?.message?.content ?? "";
+  console.log("BRIEFING RAW OUTPUT", raw);
 
   let parsed: Omit<BriefingOutput, "rawOutput">;
   try {

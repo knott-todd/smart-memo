@@ -70,7 +70,7 @@ Critical rules:
 Return ONLY the JSON object, no additional text.`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5.3",
     max_completion_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
   });

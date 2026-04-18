@@ -63,9 +63,6 @@ Rules:
 - Only use NOTE for things that clearly have no project scope
 - If MATCH: also check whether the input reveals a better title or description for the project
 - If NEW: infer a concise title (2-5 words) and one-sentence description
-- Never generate blockers or next actions from inference — only surface what the user explicitly said
-- If there's not enough info, the briefing should say so plainly rather than inventing structure
-- Every bullet must be traceable to a specific user input
 
 Return JSON only, no other text:
 {

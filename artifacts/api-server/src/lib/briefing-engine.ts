@@ -57,72 +57,36 @@ ${updatesText || "(No inputs yet)"}
 
 ---
 
-Generate a briefing in this exact JSON format:
-{
-  "lastKnownState": "1-2 sentences describing where the project stands based ONLY on what the user has written. If there is very little information, say so plainly.",
-  "confidenceLevel": "high|medium|low",
-  "confidenceLabel": "Must reflect recency and amount of information (e.g. 'Based on your update today', 'Based on info from 3 days ago', 'Very little info captured yet')",
-  "blockers": ["Only include if explicitly stated by the user (see rules below)"],
-  "nextActions": ["Only include if explicitly stated by the user (see rules below)"]
-}
+Generate a briefing with these fields:
+- "lastKnownState" (always required): 1-2 sentences based ONLY on what the user has written.
+- "confidenceLevel" (always required): "high" | "medium" | "low"
+- "confidenceLabel" (always required): reflects recency and amount of info (e.g. "Based on your update today", "Very little info captured yet")
+- "blockers" (ONLY if the user explicitly used words like "blocked", "stuck", "can't", "issue", "problem", "not working")
+- "nextActions" (ONLY if the user explicitly stated intent with phrases like "I need to", "I will", "plan to", "next I")
+
+If blockers or nextActions are not explicitly present in the user's words, do not include those fields at all.
 
 ---
 
-STRICT RULES (must be followed exactly):
+EXAMPLES:
 
-1. ZERO INFERENCE
-- Every word in the output must be directly traceable to the user's text.
-- If you cannot point to exact wording or a very close paraphrase, DO NOT include it.
+User input: "I want to build a superhero action figure with laser eyes"
 
-2. LAST KNOWN STATE
-- Only restate what the user has said.
-- Do NOT expand, interpret, or add missing context.
-- If the user provided minimal information, explicitly say that.
-
-3. BLOCKERS (VERY STRICT)
-- Only include this field if the user explicitly mentioned a problem.
-- Valid signals include phrases like: "blocked", "stuck", "issue", "problem", "can't", "not working".
-- Missing information, incomplete plans, or logical gaps DO NOT count as blockers.
-- If no explicit blocker is stated, OMIT the entire "blockers" field.
-
-4. NEXT ACTIONS (VERY STRICT)
-- Only include this field if the user explicitly stated intent.
-- Valid signals include phrases like: "I need to", "I will", "next I", "plan to".
-- Goals or ideas DO NOT count as actions.
-- Do NOT convert intentions into steps.
-- If no explicit actions are stated, OMIT the entire "nextActions" field.
-
-5. CONFIDENCE
-- "high" = recent and clear input
-- "medium" = slightly stale or somewhat vague
-- "low" = very little or outdated information
-- The label must match the actual recency and amount of input.
-
-6. MINIMALISM
-- When in doubt, output LESS.
-- Short and incomplete is correct.
-- Adding inferred detail is incorrect.
-
----
-
-VALID ZERO-INFERENCE EXAMPLE:
-
-User input:
-"I want to build a superhero action figure with laser eyes"
-
-Correct output:
+CORRECT output:
 {
   "lastKnownState": "The user wants to build a superhero action figure with laser eyes. No further details have been provided.",
   "confidenceLevel": "high",
   "confidenceLabel": "Based on your update today"
 }
 
----
-
-FINAL VERIFICATION STEP (mandatory):
-- Check every field before returning.
-- If any part is not directly supported by the user's words, remove it.
-- Ensure blockers and nextActions are completely omitted if not explicitly present.
+WRONG output (do not do this — blockers and nextActions were invented, not stated):
+{
+  "lastKnownState": "The user wants to build a superhero action figure with laser eyes.",
+  "confidenceLevel": "high",
+  "confidenceLabel": "Based on your update today",
+  "blockers": ["No defined materials or tools", "No design plan"],
+  "nextActions": ["Sketch a concept", "Choose materials", "Define laser eye mechanism"]
+}
 
 ---
 

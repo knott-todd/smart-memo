@@ -4,6 +4,7 @@ import { logger } from "./logger";
 export interface BriefingOutput {
   lastKnownState: string;
   confidenceLevel: "high" | "medium" | "low";
+  confidenceLabel: string;
   blockers: string[];
   nextActions: string[];
   rawOutput: string;
@@ -53,19 +54,23 @@ Generate a briefing in this exact JSON format:
 {
   "lastKnownState": "1-2 sentence description of where the project stands right now, based only on available information",
   "confidenceLevel": "high|medium|low (high = active updates in last 2 days, medium = 3-7 days or sparse updates, low = 8+ days or minimal information)",
-  "blockers": ["array of specific blockers or obstacles — be precise, max 3", "..."],
-  "nextActions": ["1-3 concrete next actions the person should take — be specific", "..."]
+  "confidenceLabel": "Human-readable string explaining the confidence, e.g. 'Based on info from 3 days ago' or 'Based on your update today' or 'Last updated 2 weeks ago — may be stale'",
+  "blockers": ["array of specific blockers — only include if something is genuinely stuck. Omit this field entirely if nothing is blocked."],
+  "nextActions": ["concrete next actions the person should take — be specific and grounded in what they said. Use parent-child structure when actions share a goal, e.g. 'Get the world model working' as parent with sub-actions indented with a dash prefix like '- Stabilise plane fitting'"]
 }
 
-Confidence guidelines:
-- high: recent activity, clear picture of project state
-- medium: some activity but gaps, or inferred state
-- low: stale data, no recent activity, or insufficient information
+Rules:
+- Never invent content not present in the updates
+- Never use motivational language
+- Omit blockers entirely if nothing is blocked — do not include an empty array
+- Weight recent inputs over older ones
+- The confidenceLabel must be a natural sentence a human would say
+- nextActions must be grounded in what the user said, not generic suggestions
 
 Return ONLY the JSON object, no additional text.`;
 
   const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: "gpt-4o",
     max_completion_tokens: 1024,
     messages: [{ role: "user", content: prompt }],
   });
@@ -82,6 +87,7 @@ Return ONLY the JSON object, no additional text.`;
     parsed = {
       lastKnownState: "Unable to generate briefing. Please add more project updates.",
       confidenceLevel: "low",
+      confidenceLabel: "No data available yet",
       blockers: [],
       nextActions: ["Add a project update to get a better briefing"],
     };
@@ -92,6 +98,7 @@ Return ONLY the JSON object, no additional text.`;
     confidenceLevel: (["high", "medium", "low"].includes(parsed.confidenceLevel)
       ? parsed.confidenceLevel
       : "low") as BriefingOutput["confidenceLevel"],
+    confidenceLabel: parsed.confidenceLabel || `Based on info from ${daysSinceActivity != null ? `${daysSinceActivity} days ago` : "recently"}`,
     blockers: Array.isArray(parsed.blockers) ? parsed.blockers : [],
     nextActions: Array.isArray(parsed.nextActions) ? parsed.nextActions : [],
     rawOutput: raw,

@@ -3,10 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
+import Landing from "@/pages/landing";
 import BrainDump from "@/pages/brain-dump";
-import ProjectsCarousel from "@/pages/projects-carousel";
+import Projects from "@/pages/projects";
 import ProjectDetail from "@/pages/project";
-import NewProject from "@/pages/new-project";
 import Onboarding from "@/pages/onboarding";
 import { useEffect, useState } from "react";
 
@@ -41,10 +41,10 @@ function AppRoutes() {
 
   return (
     <Switch>
-      <Route path="/" component={BrainDump} />
-      <Route path="/projects" component={ProjectsCarousel} />
+      <Route path="/" component={Landing} />
+      <Route path="/dump" component={BrainDump} />
+      <Route path="/projects" component={Projects} />
       <Route path="/projects/:id" component={ProjectDetail} />
-      <Route path="/new" component={NewProject} />
       <Route component={NotFound} />
     </Switch>
   );

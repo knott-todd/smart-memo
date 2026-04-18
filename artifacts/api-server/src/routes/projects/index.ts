@@ -251,6 +251,7 @@ router.post("/projects/:id/briefing", async (req, res): Promise<void> => {
       projectId: params.data.id,
       lastKnownState: briefingOutput.lastKnownState,
       confidenceLevel: briefingOutput.confidenceLevel,
+      confidenceLabel: briefingOutput.confidenceLabel,
       blockers: briefingOutput.blockers,
       nextActions: briefingOutput.nextActions,
       rawOutput: briefingOutput.rawOutput,
@@ -366,16 +367,16 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
   }
 
   const { content } = parsed.data;
-  const existingProjects = await db.select().from(projectsTable).orderBy(desc(projectsTable.updatedAt));
+
+  // Fetch all projects, explicitly excluding the internal notes bucket
+  const allProjects = await db.select().from(projectsTable).orderBy(desc(projectsTable.updatedAt));
+  const existingProjects = allProjects.filter((p) => p.title !== "__notes__");
 
   const classification = await classifyInput(content, existingProjects);
 
-  // ── Note: save without attaching to any project ──────────────────────────
+  // ── Note: save without attaching to any real project ──────────────────────
   if (classification.isNote) {
-    // Store as a loose update with no projectId by using a special "notes" project,
-    // or — since the schema requires projectId — we save it against a persistent
-    // "Notes" project that we find-or-create but never surface as a real project.
-    let notesProject = existingProjects.find((p) => p.title === "__notes__");
+    let notesProject = allProjects.find((p) => p.title === "__notes__");
     if (!notesProject) {
       [notesProject] = await db
         .insert(projectsTable)
@@ -401,7 +402,7 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
     return;
   }
 
-  // ── Project match or creation ─────────────────────────────────────────────
+  // ── Project match or creation ──────────────────────────────────────────────
   let project;
   let isNew = false;
 
@@ -420,6 +421,17 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
         projectType: "other",
       })
       .returning();
+  } else if (classification.updatedTitle || classification.updatedDescription) {
+    // Dynamic field update — user revealed new info about an existing project
+    const updateData: Record<string, unknown> = { updatedAt: new Date() };
+    if (classification.updatedTitle) updateData.title = classification.updatedTitle;
+    if (classification.updatedDescription) updateData.description = classification.updatedDescription;
+    const [updated] = await db
+      .update(projectsTable)
+      .set(updateData)
+      .where(eq(projectsTable.id, project.id))
+      .returning();
+    if (updated) project = updated;
   }
 
   const [update] = await db

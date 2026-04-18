@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
-import { X, Inbox, FolderOpen, Plus } from "lucide-react";
+import { X, Inbox, FolderOpen, Home } from "lucide-react";
 import { useListProjects, useGetDashboard, getGetDashboardQueryKey } from "@workspace/api-client-react";
 
 interface SideDrawerProps {
@@ -53,6 +53,16 @@ export function SideDrawer({ open, onClose }: SideDrawerProps) {
               location === "/" ? "text-foreground bg-secondary/50" : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
             }`}
           >
+            <Home className="w-4 h-4 shrink-0" />
+            Home
+          </Link>
+
+          <Link
+            href="/dump"
+            className={`flex items-center gap-3 px-5 py-3 text-sm transition-colors ${
+              location === "/dump" ? "text-foreground bg-secondary/50" : "text-muted-foreground hover:text-foreground hover:bg-secondary/30"
+            }`}
+          >
             <Inbox className="w-4 h-4 shrink-0" />
             Brain Dump
           </Link>
@@ -64,40 +74,28 @@ export function SideDrawer({ open, onClose }: SideDrawerProps) {
             }`}
           >
             <FolderOpen className="w-4 h-4 shrink-0" />
-            Projects
+            My Projects
             {dashboard && (
-              <span className="ml-auto text-xs text-muted-foreground/50">{dashboard.totalProjects}</span>
+              <span className="ml-auto text-xs text-muted-foreground/40">{dashboard.totalProjects}</span>
             )}
           </Link>
 
           {projects && projects.length > 0 && (
             <div className="mt-4 px-5">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/40 mb-2">Recent</p>
-              {projects.slice(0, 5).map((p) => (
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground/35 mb-2">Recent</p>
+              {projects.slice(0, 6).map((p) => (
                 <Link
                   key={p.id}
                   href={`/projects/${p.id}`}
                   className="flex items-center gap-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors truncate"
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    p.status === "active" ? "bg-green-500" :
-                    p.status === "coasting" ? "bg-amber-500" : "bg-muted-foreground/30"
-                  }`} />
+                  <span className="w-1 h-1 rounded-full shrink-0 bg-muted-foreground/30" />
                   {p.title}
                 </Link>
               ))}
             </div>
           )}
         </nav>
-
-        <div className="px-5 py-4 border-t border-border/50">
-          <Link
-            href="/new"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Plus className="w-4 h-4" /> New Project
-          </Link>
-        </div>
       </div>
     </>
   );

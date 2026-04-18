@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { Send, Mic, MicOff, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useGetDashboard, getGetDashboardQueryKey } from "@workspace/api-client-react";
 import { AppHeader } from "@/components/app-header";
@@ -89,11 +89,15 @@ function formatTime(date: Date | string) {
   return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function ActivityLog({ label }: { label: string }) {
+function ActivityLog({ label, href }: { label: string; href?: string }) {
+  const [, setLocation] = useLocation();
   return (
-    <div className="flex items-center gap-2 my-1.5 px-1">
+    <div
+      className={`flex items-center gap-2 my-1.5 px-1 ${href ? "cursor-pointer" : ""}`}
+      onClick={href ? () => setLocation(href) : undefined}
+    >
       <span className="text-muted-foreground/20 text-[10px] tracking-widest select-none shrink-0">──</span>
-      <span className="text-muted-foreground/35 text-[11px] font-mono whitespace-nowrap">{label}</span>
+      <span className={`text-[11px] font-mono whitespace-nowrap ${href ? "text-muted-foreground/50 hover:text-muted-foreground/70" : "text-muted-foreground/35"}`}>{label}</span>
       <span className="text-muted-foreground/20 text-[10px] tracking-widest select-none shrink-0">──</span>
     </div>
   );
@@ -119,7 +123,9 @@ export default function BrainDump() {
   const editInputRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: dashboard } = useGetDashboard({ query: { queryKey: getGetDashboardQueryKey() } });
-  const activeCount = (dashboard?.activeProjects ?? 0) + (dashboard?.coastingProjects ?? 0);
+
+  // suppress unused dashboard warning — kept for future nudge logic
+  void dashboard;
 
   useEffect(() => {
     fetchAllUpdates().then((data) => {
@@ -304,14 +310,7 @@ export default function BrainDump() {
     <div className="flex flex-col h-screen bg-background" onClick={() => setContextMenu(null)}>
       <AppHeader title="Brain Dump" />
 
-      {activeCount > 0 && isEmpty && (
-        <div className="px-4 pt-3">
-          <Link href="/projects" className="inline-block text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-            You have {activeCount} active project{activeCount !== 1 ? "s" : ""}
-          </Link>
-        </div>
-      )}
-
+      {/* Feed */}
       <div className="flex-1 overflow-y-auto px-4 pb-32 pt-4">
         {loading ? (
           <div className="flex items-center justify-center pt-20">
@@ -443,16 +442,9 @@ export default function BrainDump() {
         </div>
       )}
 
-      {/* Input bar: [Send] [input field] [Mic] */}
+      {/* Input bar: [input field] [Mic] [Send] */}
       <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-background via-background/95 to-transparent pt-8 pb-4 px-4">
         <div className="flex items-center gap-3 bg-card border border-border rounded-2xl px-4 py-3 focus-within:border-border/60 transition-colors">
-          <button
-            onClick={handleSubmit}
-            disabled={!input.trim() || submitting}
-            className="shrink-0 text-muted-foreground/40 hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-          >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -467,6 +459,13 @@ export default function BrainDump() {
             title={isListening ? "Stop listening" : "Speak"}
           >
             {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!input.trim() || submitting}
+            className="shrink-0 text-muted-foreground/40 hover:text-primary disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+          >
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </button>
         </div>
       </div>

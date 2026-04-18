@@ -8,6 +8,7 @@ export const briefingsTable = pgTable("briefings", {
   projectId: integer("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
   lastKnownState: text("last_known_state").notNull(),
   confidenceLevel: text("confidence_level").notNull().default("medium"), // high | medium | low
+  confidenceLabel: text("confidence_label").notNull().default(""),
   blockers: text("blockers").array().notNull().default([]),
   nextActions: text("next_actions").array().notNull().default([]),
   rawOutput: text("raw_output").notNull(),

@@ -27,7 +27,7 @@ router.get("/projects", async (_req, res): Promise<void> => {
     .select()
     .from(projectsTable)
     .orderBy(desc(projectsTable.updatedAt));
-  // Hide the internal notes bucket from UI
+  // Hide the legacy internal notes bucket from UI
   res.json(projects.filter((p) => p.title !== "__notes__"));
 });
 
@@ -176,7 +176,6 @@ router.post("/projects/:id/updates", async (req, res): Promise<void> => {
     })
     .returning();
 
-  // Update project lastActivityAt and status to active
   await db
     .update(projectsTable)
     .set({ lastActivityAt: new Date(), status: "active", updatedAt: new Date() })
@@ -259,7 +258,6 @@ router.post("/projects/:id/briefing", async (req, res): Promise<void> => {
     })
     .returning();
 
-  // Update project confidence level
   await db
     .update(projectsTable)
     .set({ confidenceLevel: briefingOutput.confidenceLevel, updatedAt: new Date() })
@@ -322,7 +320,6 @@ router.post("/projects/:id/worksheet", async (req, res): Promise<void> => {
     })
     .returning();
 
-  // Update project status
   await db
     .update(projectsTable)
     .set({ lastActivityAt: new Date(), status: "active", updatedAt: new Date() })
@@ -331,7 +328,7 @@ router.post("/projects/:id/worksheet", async (req, res): Promise<void> => {
   res.status(201).json(update);
 });
 
-// GET /updates — all updates across all projects, with project info
+// GET /updates — all entries across all threads, with thread info
 router.get("/updates", async (_req, res): Promise<void> => {
   const rows = await db
     .select({
@@ -347,18 +344,18 @@ router.get("/updates", async (_req, res): Promise<void> => {
     .innerJoin(projectsTable, eq(updatesTable.projectId, projectsTable.id))
     .orderBy(updatesTable.createdAt);
 
-  // Mark rows from the internal __notes__ bucket as notes
-  const normalised = rows.map((row) => ({
-    ...row,
-    isNote: row.projectTitle === "__notes__",
-    projectId: row.projectTitle === "__notes__" ? null : row.projectId,
-    projectTitle: row.projectTitle === "__notes__" ? null : row.projectTitle,
-  }));
+  // Filter out legacy __notes__ entries and normalise
+  const normalised = rows
+    .filter((row) => row.projectTitle !== "__notes__")
+    .map((row) => ({
+      ...row,
+      isNote: false,
+    }));
 
   res.json(normalised);
 });
 
-// POST /brain-dump — global input with AI project classification
+// POST /brain-dump — global log input with AI thread assignment
 router.post("/brain-dump", async (req, res): Promise<void> => {
   const parsed = z.object({ content: z.string().min(1) }).safeParse(req.body);
   if (!parsed.success) {
@@ -368,11 +365,15 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
 
   const { content } = parsed.data;
 
-  // Fetch all projects, explicitly excluding the internal notes bucket
-  const allProjects = await db.select().from(projectsTable).orderBy(desc(projectsTable.updatedAt));
-  const existingProjects = allProjects.filter((p) => p.title !== "__notes__");
+  const allThreads = await db
+    .select()
+    .from(projectsTable)
+    .orderBy(desc(projectsTable.updatedAt));
 
-  // Fetch last 5 updates across all projects for context
+  // Exclude legacy __notes__ bucket from classifier context
+  const existingThreads = allThreads.filter((p) => p.title !== "__notes__");
+
+  // Recent entries for context (last 5)
   const recentUpdates = await db
     .select({
       content: updatesTable.content,
@@ -380,7 +381,6 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
     })
     .from(updatesTable)
     .innerJoin(projectsTable, eq(updatesTable.projectId, projectsTable.id))
-    .where(eq(projectsTable.title, projectsTable.title)) // all projects
     .orderBy(desc(updatesTable.createdAt))
     .limit(5);
 
@@ -388,72 +388,45 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
     .filter((u) => u.projectTitle !== "__notes__")
     .map((u) => ({ content: u.content, projectTitle: u.projectTitle }));
 
-  const classification = await classifyInput(content, existingProjects, recentHistory);
+  const classification = await classifyInput(content, existingThreads, recentHistory);
 
-  // ── Note: save without attaching to any real project ──────────────────────
-  if (classification.isNote) {
-    let notesProject = allProjects.find((p) => p.title === "__notes__");
-    if (!notesProject) {
-      [notesProject] = await db
-        .insert(projectsTable)
-        .values({
-          title: "__notes__",
-          description: "Internal bucket for loose notes",
-          projectType: "other",
-        })
-        .returning();
-    }
-
-    const [update] = await db
-      .insert(updatesTable)
-      .values({
-        projectId: notesProject.id,
-        content,
-        sourceType: "text",
-        tags: ["note"],
-      })
-      .returning();
-
-    res.status(201).json({ update, project: null, isNew: false, isNote: true });
-    return;
-  }
-
-  // ── Project match or creation ──────────────────────────────────────────────
-  let project;
+  // ── Match existing thread ─────────────────────────────────────────────────
+  let thread;
   let isNew = false;
 
   if (classification.projectId) {
-    const found = existingProjects.find((p) => p.id === classification.projectId);
-    if (found) project = found;
+    const found = existingThreads.find((t) => t.id === classification.projectId);
+    if (found) thread = found;
   }
 
-  if (!project) {
+  if (!thread) {
+    // ── Create new thread ───────────────────────────────────────────────────
     isNew = true;
-    [project] = await db
+    [thread] = await db
       .insert(projectsTable)
       .values({
-        title: classification.newProjectTitle ?? "Untitled Project",
+        title: classification.newProjectTitle ?? "untitled thread",
         description: classification.newProjectDescription ?? "",
         projectType: "other",
       })
       .returning();
   } else if (classification.updatedTitle || classification.updatedDescription) {
-    // Dynamic field update — user revealed new info about an existing project
+    // ── AI revealed a better name/description for the thread ────────────────
     const updateData: Record<string, unknown> = { updatedAt: new Date() };
     if (classification.updatedTitle) updateData.title = classification.updatedTitle;
     if (classification.updatedDescription) updateData.description = classification.updatedDescription;
     const [updated] = await db
       .update(projectsTable)
       .set(updateData)
-      .where(eq(projectsTable.id, project.id))
+      .where(eq(projectsTable.id, thread.id))
       .returning();
-    if (updated) project = updated;
+    if (updated) thread = updated;
   }
 
   const [update] = await db
     .insert(updatesTable)
     .values({
-      projectId: project.id,
+      projectId: thread.id,
       content,
       sourceType: "text",
       tags: [],
@@ -463,16 +436,19 @@ router.post("/brain-dump", async (req, res): Promise<void> => {
   await db
     .update(projectsTable)
     .set({ lastActivityAt: new Date(), status: "active", updatedAt: new Date() })
-    .where(eq(projectsTable.id, project.id));
+    .where(eq(projectsTable.id, thread.id));
 
-  res.status(201).json({ update, project, isNew, isNote: false });
+  res.status(201).json({ update, project: thread, isNew, isNote: false });
 });
 
 // GET /dashboard
 router.get("/dashboard", async (_req, res): Promise<void> => {
-  const projects = await db.select().from(projectsTable);
+  const projects = await db
+    .select()
+    .from(projectsTable)
+    .where(eq(projectsTable.title, projectsTable.title)); // all
 
-  const activeProjects = projects.filter((p) => p.status === "active").length;
+  const activeProjects = projects.filter((p) => p.status === "active" && p.title !== "__notes__").length;
   const coastingProjects = projects.filter((p) => p.status === "coasting").length;
   const darkProjects = projects.filter((p) => p.status === "dark").length;
 
@@ -491,7 +467,7 @@ router.get("/dashboard", async (_req, res): Promise<void> => {
     .limit(5);
 
   res.json({
-    totalProjects: projects.length,
+    totalProjects: projects.filter((p) => p.title !== "__notes__").length,
     activeProjects,
     coastingProjects,
     darkProjects,

@@ -11,7 +11,6 @@ export default function Landing() {
     <div className="flex flex-col h-screen bg-background">
       <SideDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
-      {/* Hamburger */}
       <div className="px-4 pt-4">
         <button
           onClick={() => setDrawerOpen(true)}
@@ -22,22 +21,32 @@ export default function Landing() {
         </button>
       </div>
 
-      {/* Main content — vertically centered */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4 pb-12">
-        <button
-          onClick={() => setLocation("/projects")}
-          className="w-full max-w-sm bg-card border border-border/50 rounded-2xl flex items-center justify-center hover:border-primary/40 hover:bg-card/80 active:scale-[0.98] transition-all"
-          style={{ height: "clamp(100px, 28vh, 180px)" }}
-        >
-          <span className="font-serif text-2xl text-foreground/80">My Projects</span>
-        </button>
+      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-3 pb-12">
+        {/* App name */}
+        <p className="font-serif text-muted-foreground/25 text-sm tracking-widest uppercase mb-4 select-none">
+          Continuity
+        </p>
 
         <button
           onClick={() => setLocation("/dump")}
-          className="w-full max-w-sm bg-card border border-border/50 rounded-2xl flex items-center justify-center hover:border-primary/40 hover:bg-card/80 active:scale-[0.98] transition-all"
-          style={{ height: "clamp(100px, 28vh, 180px)" }}
+          className="w-full max-w-sm bg-card border border-border/50 rounded-2xl flex flex-col items-start justify-end hover:border-border/80 active:scale-[0.98] transition-all px-6"
+          style={{ height: "clamp(100px, 26vh, 170px)" }}
         >
-          <span className="font-serif text-2xl text-foreground/80">Brain Dump</span>
+          <span className="font-serif text-2xl text-foreground/75 mb-1.5">Log</span>
+          <span className="text-xs text-muted-foreground/25 mb-5 leading-snug">
+            Drop anything — thought, update, idea
+          </span>
+        </button>
+
+        <button
+          onClick={() => setLocation("/projects")}
+          className="w-full max-w-sm bg-card border border-border/50 rounded-2xl flex flex-col items-start justify-end hover:border-border/80 active:scale-[0.98] transition-all px-6"
+          style={{ height: "clamp(100px, 26vh, 170px)" }}
+        >
+          <span className="font-serif text-2xl text-foreground/75 mb-1.5">Threads</span>
+          <span className="text-xs text-muted-foreground/25 mb-5 leading-snug">
+            Everything you've logged, organised
+          </span>
         </button>
       </div>
     </div>

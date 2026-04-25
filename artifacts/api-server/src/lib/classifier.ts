@@ -1,7 +1,7 @@
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
 
-interface ExistingProject {
+interface ExistingThread {
   id: number;
   title: string;
   description: string | null;
@@ -18,64 +18,61 @@ export interface ClassificationResult {
   newProjectDescription: string | null;
   updatedTitle: string | null;
   updatedDescription: string | null;
-  isNote: boolean;
+  isNote: false; // Always false — everything gets a thread now
 }
 
 export async function classifyInput(
   content: string,
-  existingProjects: ExistingProject[],
+  existingThreads: ExistingThread[],
   recentHistory: RecentEntry[] = []
 ): Promise<ClassificationResult> {
-  const projectList =
-    existingProjects.length > 0
-      ? existingProjects
-          .map((p) => `- ID ${p.id}: "${p.title}"${p.description ? ` — ${p.description}` : ""}`)
+  const threadList =
+    existingThreads.length > 0
+      ? existingThreads
+          .map((t) => `- ID ${t.id}: "${t.title}"${t.description ? ` — ${t.description}` : ""}`)
           .join("\n")
-      : "(none)";
+      : "(none yet)";
 
   const lastEntry = recentHistory[0];
   const olderHistory = recentHistory.slice(1);
 
   const immediateContext = lastEntry
-    ? `\nThe message sent immediately before this one: "${lastEntry.content}"${lastEntry.projectTitle ? ` [→ ${lastEntry.projectTitle}]` : ""}`
+    ? `\nThe entry logged immediately before this one: "${lastEntry.content}"${lastEntry.projectTitle ? ` [→ ${lastEntry.projectTitle}]` : ""}`
     : "";
 
   const olderContext =
     olderHistory.length > 0
-      ? "\nEarlier context (less relevant):\n" +
+      ? "\nEarlier context:\n" +
         olderHistory
           .map((e) => `- "${e.content}"${e.projectTitle ? ` [→ ${e.projectTitle}]` : ""}`)
           .join("\n")
       : "";
 
-  const prompt = `You are a project classifier for a productivity app called Continuity. A user dumped a raw thought or update.
+  const prompt = `You are the threading engine for Continuity — a personal log app. Every entry the user types must be assigned to a thread. Threads are named clusters of related entries. They can be projects, topics, people, recurring ideas — anything.
 
-Existing projects:
-${projectList}
+Existing threads:
+${threadList}
 ${immediateContext}
 ${olderContext}
 
-New input: "${content}"
+New entry: "${content}"
 
-Decide ONE of three outcomes:
+Decide ONE of two outcomes:
 
-1. MATCH — this input relates to an existing project. Use this whenever the input mentions, updates, or continues work on something that matches an existing project. Also use MATCH when the input is a follow-up or correction to something in the recent conversation context that was logged to a project (e.g. "actually it should be black" after discussing a lamp design). Err strongly on the side of matching.
+1. MATCH — this entry continues or relates to an existing thread. Use the immediate prior entry as the strongest signal — if this entry feels like a continuation, match it to the same thread. Err heavily toward MATCH when there's any reasonable connection.
 
-2. NEW — this input describes something genuinely new with ongoing scope: building a product, running a campaign, a multi-step task. Only use NEW if no existing project fits at all.
-
-3. NOTE — this is a loose thought with no ongoing project scope: a one-off reminder, random observation, or idea that clearly doesn't connect to anything being built or worked on. Use NOTE sparingly.
+2. NEW — no existing thread fits at all. Create a new one with a specific, natural name. Thread names should be concrete and descriptive (e.g. "dentist appointment", "Continuity app", "half marathon training", "side project pricing"), not vague buckets like "health" or "misc". Even a single one-off thought gets its own thread if it doesn't fit anything existing — it may accumulate more entries later.
 
 Rules:
-- The message sent immediately before this one is the strongest context signal — if the new input feels like a continuation of it, match to the same project
-- If the input contains BOTH a project-related thought AND a personal/unrelated aside (e.g. "I need to plan the architecture. Also call John."), treat the whole message as MATCH to the relevant project — do not let the aside push it to NOTE
-- Strongly prefer MATCH if there is any reasonable connection to an existing project
-- Only use NOTE for things that clearly have no project scope whatsoever
-- If MATCH: also check whether the input reveals a better title or description for the project
-- If NEW: infer a concise title (2-5 words) and one-sentence description
+- The prior entry is the strongest context signal. Follow-ups, corrections, and continuations all belong to the same thread.
+- Mixed messages (project thought + personal aside) → MATCH to the project thread.
+- There is no NOTE or discard option. Every entry gets a thread.
+- If MATCH: also check whether the entry reveals a better title or description for the thread.
+- If NEW: infer a concise title (2–5 words, lowercase preferred) and a one-sentence description.
 
 Return JSON only, no other text:
 {
-  "outcome": "match" | "new" | "note",
+  "outcome": "match" | "new",
   "projectId": <number or null>,
   "newProjectTitle": <string or null>,
   "newProjectDescription": <string or null>,
@@ -91,29 +88,17 @@ Return JSON only, no other text:
     });
 
     const raw = response.choices[0]?.message?.content ?? "";
-
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON found");
 
     const parsed = JSON.parse(jsonMatch[0]) as {
-      outcome: "match" | "new" | "note";
+      outcome: "match" | "new";
       projectId?: number | null;
       newProjectTitle?: string | null;
       newProjectDescription?: string | null;
       updatedTitle?: string | null;
       updatedDescription?: string | null;
     };
-
-    if (parsed.outcome === "note") {
-      return {
-        projectId: null,
-        newProjectTitle: null,
-        newProjectDescription: null,
-        updatedTitle: null,
-        updatedDescription: null,
-        isNote: true,
-      };
-    }
 
     if (parsed.outcome === "match" && typeof parsed.projectId === "number") {
       return {
@@ -129,21 +114,21 @@ Return JSON only, no other text:
     // outcome === "new"
     return {
       projectId: null,
-      newProjectTitle: parsed.newProjectTitle ?? "Untitled Project",
+      newProjectTitle: parsed.newProjectTitle ?? "untitled thread",
       newProjectDescription: parsed.newProjectDescription ?? null,
       updatedTitle: null,
       updatedDescription: null,
       isNote: false,
     };
   } catch (err) {
-    logger.error({ err }, "Failed to parse classification JSON — defaulting to note");
+    logger.error({ err }, "Failed to parse classification JSON — creating new thread as fallback");
     return {
       projectId: null,
-      newProjectTitle: null,
+      newProjectTitle: "untitled thread",
       newProjectDescription: null,
       updatedTitle: null,
       updatedDescription: null,
-      isNote: true,
+      isNote: false,
     };
   }
 }

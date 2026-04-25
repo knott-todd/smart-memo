@@ -1,0 +1,1253 @@
+import { useState } from “react”;
+
+const styles = `
+@import url(‘https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap’);
+
+- { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+–bg-base: #0f0f10;
+–bg-1: #161618;
+–bg-2: #1e1e21;
+–bg-3: #28282d;
+–fg-primary: #e8e6e0;
+–fg-secondary: #8a8880;
+–fg-muted: #52504e;
+–accent: #c4a882;
+–accent-dim: rgba(196,168,130,0.12);
+–accent-border: rgba(196,168,130,0.22);
+–green: #7fb69a;
+–amber: #c4a454;
+–red: #c47a6a;
+–font-serif: ‘DM Serif Display’, Georgia, serif;
+–font-sans: ‘DM Sans’, sans-serif;
+–font-mono: ‘DM Mono’, monospace;
+}
+
+body {
+background: #0a0a0b;
+font-family: var(–font-sans);
+color: var(–fg-primary);
+min-height: 100vh;
+display: flex;
+align-items: flex-start;
+justify-content: center;
+padding: 48px 24px;
+}
+
+.app {
+width: 100%;
+max-width: 1200px;
+}
+
+/* HEADER */
+.header {
+margin-bottom: 56px;
+display: flex;
+align-items: baseline;
+gap: 16px;
+}
+
+.logo {
+font-family: var(–font-serif);
+font-size: 28px;
+color: var(–fg-primary);
+letter-spacing: -0.5px;
+}
+
+.logo em {
+font-style: italic;
+color: var(–accent);
+}
+
+.header-sub {
+font-family: var(–font-mono);
+font-size: 11px;
+color: var(–fg-muted);
+letter-spacing: 0.08em;
+text-transform: uppercase;
+}
+
+/* SCREEN GRID */
+.screen-grid {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 32px;
+align-items: start;
+}
+
+@media (max-width: 900px) {
+.screen-grid { grid-template-columns: 1fr; }
+}
+
+/* PHONE FRAME */
+.phone-wrap {
+display: flex;
+flex-direction: column;
+gap: 16px;
+}
+
+.screen-label {
+font-family: var(–font-mono);
+font-size: 10px;
+color: var(–fg-muted);
+letter-spacing: 0.1em;
+text-transform: uppercase;
+padding-left: 4px;
+}
+
+.phone {
+background: var(–bg-base);
+border-radius: 36px;
+border: 1px solid rgba(255,255,255,0.06);
+overflow: hidden;
+position: relative;
+box-shadow:
+0 0 0 1px rgba(0,0,0,0.6),
+0 32px 64px rgba(0,0,0,0.5),
+inset 0 1px 0 rgba(255,255,255,0.04);
+/* Fixed height for consistent phone size */
+height: 680px;
+display: flex;
+flex-direction: column;
+}
+
+/* Notch */
+.notch {
+width: 100px;
+height: 28px;
+background: var(–bg-base);
+border-radius: 0 0 20px 20px;
+margin: 0 auto;
+position: relative;
+z-index: 10;
+flex-shrink: 0;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 6px;
+}
+
+.notch-cam {
+width: 10px;
+height: 10px;
+border-radius: 50%;
+background: #1a1a1c;
+border: 1px solid rgba(255,255,255,0.06);
+}
+
+.notch-pill {
+width: 48px;
+height: 5px;
+border-radius: 3px;
+background: #1a1a1c;
+}
+
+/* Screen content wrapper */
+.screen-content {
+flex: 1;
+overflow: hidden;
+display: flex;
+flex-direction: column;
+position: relative;
+}
+
+/* –– TOP BAR –– */
+.top-bar {
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding: 12px 20px 10px;
+border-bottom: 1px solid rgba(255,255,255,0.04);
+flex-shrink: 0;
+}
+
+.top-bar-icon {
+width: 32px;
+height: 32px;
+display: flex;
+align-items: center;
+justify-content: center;
+border-radius: 8px;
+color: var(–fg-secondary);
+}
+
+.top-bar-title {
+font-family: var(–font-sans);
+font-size: 14px;
+font-weight: 500;
+color: var(–fg-primary);
+letter-spacing: 0.01em;
+}
+
+/* –– BRAIN DUMP –– */
+.feed {
+flex: 1;
+overflow-y: auto;
+padding: 16px 16px 8px;
+display: flex;
+flex-direction: column;
+gap: 12px;
+}
+
+.message-wrap {
+display: flex;
+flex-direction: column;
+gap: 6px;
+}
+
+.bubble {
+background: var(–bg-2);
+border-radius: 14px 14px 14px 4px;
+padding: 11px 14px;
+font-size: 13px;
+line-height: 1.5;
+color: var(–fg-primary);
+border: 1px solid rgba(255,255,255,0.04);
+}
+
+.bubble.voice {
+display: flex;
+flex-direction: column;
+gap: 8px;
+}
+
+.voice-row {
+display: flex;
+align-items: center;
+gap: 10px;
+}
+
+.play-btn {
+width: 26px;
+height: 26px;
+border-radius: 50%;
+background: var(–accent-dim);
+border: 1px solid var(–accent-border);
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+}
+
+.play-triangle {
+width: 0;
+height: 0;
+border-top: 4.5px solid transparent;
+border-bottom: 4.5px solid transparent;
+border-left: 8px solid var(–accent);
+margin-left: 2px;
+}
+
+.waveform {
+display: flex;
+align-items: center;
+gap: 2px;
+height: 20px;
+}
+
+.wave-bar {
+width: 2px;
+border-radius: 1px;
+background: var(–fg-muted);
+opacity: 0.7;
+}
+
+.voice-duration {
+font-family: var(–font-mono);
+font-size: 10px;
+color: var(–fg-muted);
+margin-left: auto;
+}
+
+.transcript {
+font-size: 11.5px;
+color: var(–fg-secondary);
+line-height: 1.5;
+border-top: 1px solid rgba(255,255,255,0.05);
+padding-top: 8px;
+}
+
+.ai-tags {
+display: flex;
+gap: 6px;
+padding-left: 4px;
+}
+
+.tag {
+font-family: var(–font-mono);
+font-size: 9.5px;
+letter-spacing: 0.04em;
+padding: 3px 8px;
+border-radius: 20px;
+border: 1px solid var(–accent-border);
+color: var(–accent);
+background: var(–accent-dim);
+}
+
+.msg-meta {
+font-family: var(–font-mono);
+font-size: 9px;
+color: var(–fg-muted);
+padding-left: 4px;
+}
+
+.input-bar {
+display: flex;
+align-items: center;
+gap: 8px;
+padding: 10px 12px 14px;
+border-top: 1px solid rgba(255,255,255,0.05);
+background: var(–bg-base);
+flex-shrink: 0;
+}
+
+.input-mic {
+width: 36px;
+height: 36px;
+border-radius: 50%;
+background: var(–bg-2);
+border: 1px solid rgba(255,255,255,0.06);
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+color: var(–fg-secondary);
+}
+
+.input-field {
+flex: 1;
+background: var(–bg-2);
+border: 1px solid rgba(255,255,255,0.06);
+border-radius: 18px;
+padding: 9px 14px;
+font-size: 13px;
+color: var(–fg-secondary);
+font-family: var(–font-sans);
+}
+
+.input-send {
+width: 36px;
+height: 36px;
+border-radius: 50%;
+background: var(–accent);
+display: flex;
+align-items: center;
+justify-content: center;
+flex-shrink: 0;
+}
+
+/* –– PROJECTS CAROUSEL –– */
+.carousel-area {
+flex: 1;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+gap: 20px;
+padding: 16px 0 20px;
+}
+
+.carousel-row {
+display: flex;
+align-items: center;
+gap: 10px;
+width: 100%;
+padding: 0 8px;
+overflow: visible;
+}
+
+.project-card {
+background: var(–bg-2);
+border: 1px solid rgba(255,255,255,0.06);
+border-radius: 20px;
+padding: 20px;
+flex-shrink: 0;
+position: relative;
+}
+
+.project-card.center {
+width: 220px;
+box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+border-color: rgba(255,255,255,0.09);
+}
+
+.project-card.side {
+width: 148px;
+opacity: 0.42;
+transform: scale(0.94);
+padding: 16px;
+}
+
+.project-tag {
+display: inline-block;
+font-family: var(–font-mono);
+font-size: 9px;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+padding: 3px 8px;
+border-radius: 20px;
+margin-bottom: 10px;
+}
+
+.tag-purple { background: rgba(160,130,200,0.12); color: #a082c8; border: 1px solid rgba(160,130,200,0.2); }
+.tag-green { background: rgba(127,182,154,0.12); color: var(–green); border: 1px solid rgba(127,182,154,0.2); }
+.tag-amber { background: rgba(196,164,84,0.12); color: var(–amber); border: 1px solid rgba(196,164,84,0.2); }
+
+.card-title {
+font-family: var(–font-serif);
+font-size: 17px;
+color: var(–fg-primary);
+margin-bottom: 6px;
+letter-spacing: -0.2px;
+}
+
+.card-title.sm {
+font-size: 13px;
+margin-bottom: 4px;
+}
+
+.card-state {
+font-size: 12px;
+color: var(–fg-secondary);
+line-height: 1.4;
+margin-bottom: 12px;
+}
+
+.card-state.sm {
+font-size: 10.5px;
+margin-bottom: 8px;
+}
+
+.card-footer {
+display: flex;
+align-items: center;
+justify-content: space-between;
+}
+
+.card-time {
+font-family: var(–font-mono);
+font-size: 9.5px;
+color: var(–fg-muted);
+}
+
+.confidence-dot {
+width: 7px;
+height: 7px;
+border-radius: 50%;
+}
+
+.dot-high { background: var(–green); }
+.dot-mid { background: var(–amber); }
+.dot-low { background: var(–fg-muted); }
+
+.carousel-dots {
+display: flex;
+gap: 5px;
+}
+
+.carousel-dot {
+width: 5px;
+height: 5px;
+border-radius: 50%;
+background: var(–fg-muted);
+}
+
+.carousel-dot.active {
+background: var(–accent);
+width: 16px;
+border-radius: 3px;
+}
+
+/* –– PROJECT PAGE –– */
+.project-scroll {
+flex: 1;
+overflow-y: auto;
+display: flex;
+flex-direction: column;
+}
+
+.project-header {
+padding: 12px 20px 0;
+display: flex;
+align-items: flex-start;
+justify-content: space-between;
+flex-shrink: 0;
+}
+
+.project-title {
+font-family: var(–font-serif);
+font-size: 21px;
+letter-spacing: -0.3px;
+line-height: 1.15;
+color: var(–fg-primary);
+}
+
+.view-toggle {
+display: flex;
+background: var(–bg-2);
+border: 1px solid rgba(255,255,255,0.06);
+border-radius: 8px;
+padding: 3px;
+gap: 2px;
+flex-shrink: 0;
+}
+
+.toggle-btn {
+width: 28px;
+height: 24px;
+border-radius: 5px;
+display: flex;
+align-items: center;
+justify-content: center;
+color: var(–fg-muted);
+}
+
+.toggle-btn.active {
+background: var(–bg-3);
+color: var(–fg-secondary);
+}
+
+.briefing-block {
+margin: 12px 16px 0;
+background: var(–bg-1);
+border: 1px solid rgba(255,255,255,0.05);
+border-radius: 16px;
+overflow: hidden;
+flex-shrink: 0;
+}
+
+.briefing-section {
+padding: 12px 16px;
+border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.briefing-section:last-child {
+border-bottom: none;
+}
+
+.briefing-label {
+font-family: var(–font-mono);
+font-size: 9px;
+letter-spacing: 0.1em;
+text-transform: uppercase;
+color: var(–fg-muted);
+margin-bottom: 5px;
+}
+
+.briefing-text {
+font-size: 12.5px;
+line-height: 1.5;
+color: var(–fg-primary);
+}
+
+.confidence-row {
+display: flex;
+align-items: center;
+gap: 6px;
+}
+
+.confidence-bar {
+height: 3px;
+background: var(–bg-3);
+border-radius: 2px;
+flex: 1;
+overflow: hidden;
+}
+
+.confidence-fill {
+height: 100%;
+border-radius: 2px;
+background: var(–green);
+}
+
+.confidence-label {
+font-family: var(–font-mono);
+font-size: 9px;
+color: var(–fg-secondary);
+}
+
+.blockers-list {
+display: flex;
+flex-direction: column;
+gap: 5px;
+}
+
+.blocker-item {
+display: flex;
+align-items: flex-start;
+gap: 7px;
+font-size: 12px;
+color: var(–fg-primary);
+line-height: 1.4;
+}
+
+.blocker-dot {
+width: 5px;
+height: 5px;
+border-radius: 50%;
+background: var(–red);
+flex-shrink: 0;
+margin-top: 5px;
+}
+
+.actions-list {
+display: flex;
+flex-direction: column;
+gap: 5px;
+}
+
+.action-item {
+display: flex;
+align-items: flex-start;
+gap: 7px;
+font-size: 12px;
+color: var(–fg-primary);
+line-height: 1.4;
+}
+
+.action-num {
+font-family: var(–font-mono);
+font-size: 9.5px;
+color: var(–accent);
+flex-shrink: 0;
+margin-top: 2px;
+}
+
+.below-fold {
+padding: 12px 16px 24px;
+display: flex;
+flex-direction: column;
+gap: 12px;
+}
+
+.section-title {
+font-family: var(–font-mono);
+font-size: 9px;
+letter-spacing: 0.1em;
+text-transform: uppercase;
+color: var(–fg-muted);
+margin-bottom: 8px;
+}
+
+.context-block {
+background: var(–bg-2);
+border-radius: 12px;
+padding: 12px 14px;
+border: 1px solid rgba(255,255,255,0.04);
+}
+
+.context-text {
+font-size: 12px;
+line-height: 1.55;
+color: var(–fg-secondary);
+}
+
+.insights-list {
+display: flex;
+flex-direction: column;
+gap: 6px;
+}
+
+.insight-item {
+display: flex;
+gap: 8px;
+font-size: 12px;
+color: var(–fg-secondary);
+line-height: 1.4;
+background: var(–bg-2);
+border-radius: 10px;
+padding: 9px 12px;
+border: 1px solid rgba(255,255,255,0.03);
+}
+
+.insight-dash {
+color: var(–fg-muted);
+flex-shrink: 0;
+}
+
+/* Staleness banner */
+.stale-banner {
+margin: 8px 16px 0;
+background: rgba(196,164,84,0.08);
+border: 1px solid rgba(196,164,84,0.18);
+border-radius: 10px;
+padding: 9px 12px;
+display: flex;
+align-items: center;
+gap: 8px;
+flex-shrink: 0;
+}
+
+.stale-dot {
+width: 6px;
+height: 6px;
+border-radius: 50%;
+background: var(–amber);
+flex-shrink: 0;
+}
+
+.stale-text {
+font-family: var(–font-mono);
+font-size: 10px;
+color: var(–amber);
+line-height: 1.4;
+}
+
+/* Worksheet screen */
+.worksheet-wrap {
+flex: 1;
+display: flex;
+flex-direction: column;
+padding: 16px;
+gap: 12px;
+overflow-y: auto;
+}
+
+.worksheet-header {
+margin-bottom: 4px;
+}
+
+.worksheet-title {
+font-family: var(–font-serif);
+font-size: 18px;
+color: var(–fg-primary);
+margin-bottom: 4px;
+}
+
+.worksheet-sub {
+font-size: 12px;
+color: var(–fg-muted);
+}
+
+.worksheet-q {
+background: var(–bg-2);
+border: 1px solid rgba(255,255,255,0.05);
+border-radius: 14px;
+padding: 13px 14px;
+display: flex;
+flex-direction: column;
+gap: 8px;
+}
+
+.q-label {
+font-family: var(–font-mono);
+font-size: 9.5px;
+color: var(–fg-muted);
+letter-spacing: 0.06em;
+text-transform: uppercase;
+}
+
+.q-text {
+font-size: 13px;
+color: var(–fg-primary);
+line-height: 1.4;
+font-weight: 500;
+}
+
+.q-answer {
+font-size: 12px;
+color: var(–fg-secondary);
+line-height: 1.5;
+padding-top: 6px;
+border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.q-prefilled {
+font-family: var(–font-mono);
+font-size: 9px;
+color: var(–accent);
+margin-bottom: 3px;
+}
+
+.same-btn {
+background: var(–bg-3);
+border: 1px solid rgba(255,255,255,0.08);
+border-radius: 10px;
+padding: 10px 14px;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 6px;
+color: var(–fg-secondary);
+font-size: 12.5px;
+font-family: var(–font-sans);
+}
+
+.same-check {
+width: 16px;
+height: 16px;
+border-radius: 50%;
+border: 1.5px solid var(–fg-muted);
+display: flex;
+align-items: center;
+justify-content: center;
+}
+
+/* SVG icons inline */
+svg { display: block; }
+`;
+
+// –– HELPER COMPONENTS ––
+
+const WaveformBars = () => {
+const heights = [6, 10, 14, 9, 16, 11, 7, 14, 10, 8, 13, 9, 15, 6, 11, 12, 8, 10, 14, 7];
+return (
+<div className="waveform">
+{heights.map((h, i) => (
+<div
+key={i}
+className=“wave-bar”
+style={{ height: `${h}px`, opacity: i < 8 ? 1 : 0.35 }}
+/>
+))}
+</div>
+);
+};
+
+const HamburgerIcon = () => (
+<svg width="18" height="12" viewBox="0 0 18 12" fill="none">
+<rect y="0" width="18" height="1.5" rx="1" fill="currentColor"/>
+<rect y="5" width="13" height="1.5" rx="1" fill="currentColor"/>
+<rect y="10" width="18" height="1.5" rx="1" fill="currentColor"/>
+</svg>
+);
+
+const SendIcon = () => (
+<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+<path d="M2 7L12 2L7 12L6 8L2 7Z" fill="#0f0f10" strokeLinejoin="round"/>
+</svg>
+);
+
+const MicIcon = () => (
+<svg width="14" height="16" viewBox="0 0 14 16" fill="none">
+<rect x="4" y="0" width="6" height="10" rx="3" stroke="currentColor" strokeWidth="1.4"/>
+<path d="M1 8C1 11.3 3.7 14 7 14C10.3 14 13 11.3 13 8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+<line x1="7" y1="14" x2="7" y2="16" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+</svg>
+);
+
+const ChatIcon = ({ active }) => (
+<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+<rect x="1" y="1" width="12" height="10" rx="2.5" stroke="currentColor" strokeWidth="1.3"/>
+<path d="M4 13L5.5 10.5H8.5L10 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+<line x1="3.5" y1="5" x2="10.5" y2="5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+<line x1="3.5" y1="7.5" x2="8" y2="7.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+</svg>
+);
+
+const EyeIcon = () => (
+<svg width="14" height="10" viewBox="0 0 14 10" fill="none">
+<path d="M1 5C1 5 3 1 7 1C11 1 13 5 13 5C13 5 11 9 7 9C3 9 1 5 1 5Z" stroke="currentColor" strokeWidth="1.3"/>
+<circle cx="7" cy="5" r="1.8" stroke="currentColor" strokeWidth="1.3"/>
+</svg>
+);
+
+const BackIcon = () => (
+<svg width="8" height="14" viewBox="0 0 8 14" fill="none">
+<path d="M7 1L1 7L7 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+</svg>
+);
+
+// –– PHONE FRAME ––
+const Phone = ({ label, children }) => (
+
+  <div className="phone-wrap">
+    <div className="screen-label">{label}</div>
+    <div className="phone">
+      <div className="notch">
+        <div className="notch-cam"/>
+        <div className="notch-pill"/>
+      </div>
+      <div className="screen-content">
+        {children}
+      </div>
+    </div>
+  </div>
+);
+
+// –– SCREEN 1: BRAIN DUMP ––
+const BrainDumpScreen = () => (
+<Phone label="01 — Brain Dump">
+<div className="top-bar">
+<div className="top-bar-icon"><HamburgerIcon/></div>
+<span className="top-bar-title">Brain Dump</span>
+<div style={{width:32}}/>
+</div>
+
+```
+<div className="feed">
+  {/* Text message */}
+  <div className="message-wrap">
+    <div className="msg-meta">Today · 9:14am</div>
+    <div className="bubble">
+      Finished the auth flow refactor. Spent longer than expected on the token refresh logic — edge case with expired sessions.
+    </div>
+    <div className="ai-tags">
+      <span className="tag">Project updated</span>
+    </div>
+  </div>
+
+  {/* Voice message */}
+  <div className="message-wrap">
+    <div className="msg-meta">Today · 11:02am</div>
+    <div className="bubble voice">
+      <div className="voice-row">
+        <div className="play-btn"><div className="play-triangle"/></div>
+        <WaveformBars/>
+        <span className="voice-duration">0:34</span>
+      </div>
+      <div className="transcript">
+        Need to handle the Stripe webhook timeout — keeps failing in prod. Also want to talk to design about the empty state on the dashboard.
+      </div>
+    </div>
+    <div className="ai-tags">
+      <span className="tag">New project detected</span>
+    </div>
+  </div>
+
+  {/* Another text */}
+  <div className="message-wrap">
+    <div className="msg-meta">Today · 2:47pm</div>
+    <div className="bubble">
+      Called the accountant. Q2 estimates done. Follow up needed on the R&D credit.
+    </div>
+  </div>
+</div>
+
+<div className="input-bar">
+  <div className="input-mic"><MicIcon/></div>
+  <div className="input-field">What's on your mind...</div>
+  <div className="input-send"><SendIcon/></div>
+</div>
+```
+
+  </Phone>
+);
+
+// –– SCREEN 2: PROJECTS ––
+const ProjectsScreen = () => (
+<Phone label="02 — Projects">
+<div className="top-bar">
+<div className="top-bar-icon"><HamburgerIcon/></div>
+<span className="top-bar-title">Projects</span>
+<div style={{width:32}}/>
+</div>
+
+```
+<div className="carousel-area">
+  <div className="carousel-row">
+    {/* Left card (partial) */}
+    <div className="project-card side">
+      <span className="project-tag tag-amber">SMB</span>
+      <div className="card-title sm">Q2 Filing</div>
+      <div className="card-state sm">Waiting on accountant review</div>
+      <div className="card-footer">
+        <span className="card-time">3d ago</span>
+        <div className="confidence-dot dot-mid"/>
+      </div>
+    </div>
+
+    {/* Center card (active) */}
+    <div className="project-card center">
+      <span className="project-tag tag-purple">Dev</span>
+      <div className="card-title">Continuity API</div>
+      <div className="card-state">Auth refactor done. Webhook timeout unresolved.</div>
+      <div className="card-footer">
+        <span className="card-time">2h ago</span>
+        <div className="confidence-dot dot-high"/>
+      </div>
+    </div>
+
+    {/* Right card (partial) */}
+    <div className="project-card side">
+      <span className="project-tag tag-green">Personal</span>
+      <div className="card-title sm">Home Reno</div>
+      <div className="card-state sm">Contractor quote pending</div>
+      <div className="card-footer">
+        <span className="card-time">1w ago</span>
+        <div className="confidence-dot dot-low"/>
+      </div>
+    </div>
+  </div>
+
+  <div className="carousel-dots">
+    <div className="carousel-dot"/>
+    <div className="carousel-dot active"/>
+    <div className="carousel-dot"/>
+  </div>
+</div>
+```
+
+  </Phone>
+);
+
+// –– SCREEN 3: PROJECT PAGE (PRETTY VIEW) ––
+const ProjectPageScreen = () => (
+<Phone label="03 — Project · Pretty View">
+<div className="top-bar">
+<div className=“top-bar-icon” style={{color:‘var(–fg-secondary)’}}><BackIcon/></div>
+<span className="top-bar-title">Continuity API</span>
+<div className="view-toggle">
+<div className="toggle-btn active"><EyeIcon/></div>
+<div className="toggle-btn"><ChatIcon/></div>
+</div>
+</div>
+
+```
+<div className="project-scroll">
+  <div className="project-header">
+    <div className="project-title">Continuity<br/>API</div>
+  </div>
+
+  {/* Briefing block */}
+  <div className="briefing-block">
+    <div className="briefing-section">
+      <div className="briefing-label">Last known state</div>
+      <div className="briefing-text">
+        Auth flow refactor complete. Token refresh logic resolved. Stripe webhook timeout persists in production.
+      </div>
+    </div>
+
+    <div className="briefing-section">
+      <div className="briefing-label">Confidence</div>
+      <div className="confidence-row">
+        <div className="confidence-bar">
+          <div className="confidence-fill" style={{width:'82%'}}/>
+        </div>
+        <span className="confidence-label">High · 2h ago</span>
+      </div>
+    </div>
+
+    <div className="briefing-section">
+      <div className="briefing-label">Blockers</div>
+      <div className="blockers-list">
+        <div className="blocker-item">
+          <div className="blocker-dot"/>
+          Stripe webhook keeps timing out in prod — root cause unclear.
+        </div>
+        <div className="blocker-item">
+          <div className="blocker-dot"/>
+          Design review for empty state not yet scheduled.
+        </div>
+      </div>
+    </div>
+
+    <div className="briefing-section">
+      <div className="briefing-label">Next actions</div>
+      <div className="actions-list">
+        <div className="action-item">
+          <span className="action-num">01</span>
+          Check Stripe webhook logs for timeout pattern.
+        </div>
+        <div className="action-item">
+          <span className="action-num">02</span>
+          Ping design team about dashboard empty state.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* Below fold */}
+  <div className="below-fold">
+    <div>
+      <div className="section-title">Context summary</div>
+      <div className="context-block">
+        <div className="context-text">
+          Work has been consistent this week. Auth refactor was the main body of work — came in longer than estimated due to session edge cases. Webhook issue is new and unresolved.
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div className="section-title">Key insights</div>
+      <div className="insights-list">
+        <div className="insight-item">
+          <span className="insight-dash">—</span>
+          Refactor scope expanded mid-session; signals potential under-estimation pattern.
+        </div>
+        <div className="insight-item">
+          <span className="insight-dash">—</span>
+          Two open threads with external dependencies (Stripe, design).
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+  </Phone>
+);
+
+// –– SCREEN 4: DARK MODE / STALE STATE ––
+const DarkModeScreen = () => (
+<Phone label="04 — Dark Mode · Stale">
+<div className="top-bar">
+<div className=“top-bar-icon” style={{color:‘var(–fg-secondary)’}}><BackIcon/></div>
+<span className="top-bar-title">Home Reno</span>
+<div className="view-toggle">
+<div className="toggle-btn active"><EyeIcon/></div>
+<div className="toggle-btn"><ChatIcon/></div>
+</div>
+</div>
+
+```
+<div className="project-scroll">
+  <div className="project-header">
+    <div className="project-title">Home<br/>Reno</div>
+  </div>
+
+  {/* Staleness banner */}
+  <div className="stale-banner">
+    <div className="stale-dot"/>
+    <div className="stale-text">Based on info from 9 days ago. Things may have changed.</div>
+  </div>
+
+  {/* Briefing block - low confidence */}
+  <div className="briefing-block">
+    <div className="briefing-section">
+      <div className="briefing-label">Last known state</div>
+      <div className="briefing-text">
+        Waiting on contractor quote for kitchen. Two contractors contacted, one responded.
+      </div>
+    </div>
+
+    <div className="briefing-section">
+      <div className="briefing-label">Confidence</div>
+      <div className="confidence-row">
+        <div className="confidence-bar">
+          <div className="confidence-fill" style={{width:'22%', background: 'var(--amber)'}}/>
+        </div>
+        <span className="confidence-label">Low · 9d ago</span>
+      </div>
+    </div>
+
+    <div className="briefing-section">
+      <div className="briefing-label">Blockers</div>
+      <div className="blockers-list">
+        <div className="blocker-item">
+          <div className="blocker-dot"/>
+          Second contractor quote still outstanding.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* Re-entry prompt */}
+  <div style={{margin: '10px 16px 0', background: 'var(--bg-2)', borderRadius: 14, padding: '14px 16px', border: '1px solid rgba(255,255,255,0.05)'}}>
+    <div style={{fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--fg-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8}}>Re-entry check-in</div>
+    <div style={{fontSize: 13, color: 'var(--fg-primary)', marginBottom: 14, lineHeight: 1.45}}>
+      What's the status on the contractor quotes?
+    </div>
+    <div style={{display:'flex', gap: 8}}>
+      <div style={{flex:1, background:'var(--bg-3)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, padding:'9px 12px', textAlign:'center', fontSize:12, color:'var(--fg-secondary)'}}>
+        Update
+      </div>
+      <div style={{flex:1, background:'var(--accent-dim)', border:'1px solid var(--accent-border)', borderRadius:10, padding:'9px 12px', textAlign:'center', fontSize:12, color:'var(--accent)'}}>
+        Still same
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+  </Phone>
+);
+
+// –– SCREEN 5: WORKSHEET ––
+const WorksheetScreen = () => (
+<Phone label="05 — Worksheet · Re-entry">
+<div className="top-bar">
+<div className=“top-bar-icon” style={{color:‘var(–fg-secondary)’}}><BackIcon/></div>
+<span className="top-bar-title">Check-in</span>
+<div style={{width:32}}/>
+</div>
+
+```
+<div className="worksheet-wrap">
+  <div className="worksheet-header">
+    <div className="worksheet-title">Where are things?</div>
+    <div className="worksheet-sub">3 questions · pre-filled where possible</div>
+  </div>
+
+  <div className="worksheet-q">
+    <div className="q-label">Q1 of 3</div>
+    <div className="q-text">What's the current status on the Stripe webhook issue?</div>
+    <div className="q-prefilled">↑ Pre-filled from last update</div>
+    <div className="q-answer">Timeout happening in prod. Haven't dug into logs yet.</div>
+  </div>
+
+  <div className="worksheet-q">
+    <div className="q-label">Q2 of 3</div>
+    <div className="q-text">Is anything blocking progress right now?</div>
+    <div className="q-answer" style={{color:'var(--fg-muted)'}}>Tap to answer...</div>
+  </div>
+
+  <div className="worksheet-q">
+    <div className="q-label">Q3 of 3</div>
+    <div className="q-text">What's your momentum on this project? (1–5)</div>
+    <div style={{display:'flex', gap: 8, marginTop: 4}}>
+      {[1,2,3,4,5].map(n => (
+        <div key={n} style={{
+          flex:1, aspectRatio:'1', display:'flex', alignItems:'center', justifyContent:'center',
+          background: n === 3 ? 'var(--accent-dim)' : 'var(--bg-3)',
+          border: n === 3 ? '1px solid var(--accent-border)' : '1px solid rgba(255,255,255,0.05)',
+          borderRadius: 8,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 13,
+          color: n === 3 ? 'var(--accent)' : 'var(--fg-muted)'
+        }}>{n}</div>
+      ))}
+    </div>
+  </div>
+
+  <div className="same-btn">
+    <div className="same-check">
+      <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
+        <path d="M1 3L3 5L7 1" stroke="var(--fg-muted)" strokeWidth="1.3" strokeLinecap="round"/>
+      </svg>
+    </div>
+    Still same as last time
+  </div>
+
+  <div style={{background:'var(--accent)', borderRadius:12, padding:'12px 0', textAlign:'center', fontSize:13, fontWeight:500, color:'#0f0f10', marginTop:'auto'}}>
+    Save & update briefing
+  </div>
+</div>
+```
+
+  </Phone>
+);
+
+// –– MAIN APP ––
+export default function ContinuityScreens() {
+return (
+<>
+<style>{styles}</style>
+<div className="app">
+<div className="header">
+<div className="logo">Contin<em>u</em>ity</div>
+<div className="header-sub">UI Screens · Locked v1</div>
+</div>
+
+```
+    <div className="screen-grid" style={{gridTemplateColumns: 'repeat(3, 1fr)'}}>
+      <BrainDumpScreen/>
+      <ProjectsScreen/>
+      <ProjectPageScreen/>
+    </div>
+
+    <div className="screen-grid" style={{
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      maxWidth: 700,
+      marginTop: 32
+    }}>
+      <DarkModeScreen/>
+      <WorksheetScreen/>
+    </div>
+  </div>
+</>
+```
+
+);
+}

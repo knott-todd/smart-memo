@@ -1,0 +1,258 @@
+Good—this is finally the right level of specificity. I’m going to tighten this into a UI + flow spec that removes ambiguity so a code generator can’t “get creative.”
+
+⸻
+
+Continuity — Phase 1 UI & Flow Spec (v1)
+
+1. Onboarding (First Launch Only)
+
+Screens: Fullscreen slideshow (3–4 slides max)
+
+Constraints:
+
+* No scrolling
+* Swipe horizontally only
+* Minimal text (1 sentence + 1 visual per slide)
+
+Slides:
+
+1. “Pick up where you left off”
+2. “Capture anything, anytime” (voice, text, photo)
+3. “We organize it into clear next steps”
+4. Final screen → CTA button: “Start”
+
+Exit condition:
+
+* Tap “Start” → go to Brain Dump screen
+
+⸻
+
+2. Home Screen — “Brain Dump” (Default Landing)
+
+Layout (fixed, no interpretation):
+
+Top:
+
+* Left: hamburger menu icon
+* Center: title → “Brain Dump”
+* No right-side actions
+
+Main area:
+
+* Empty chat-style feed (top → bottom chronological)
+
+Bottom input bar (fixed):
+
+* Text input (placeholder: “Drop anything…”)
+* Left icon: 🎤 (record voice note)
+* Right icon: send button
+
+⸻
+
+3. Core Behavior — Chat is NOT a conversation
+
+Rules:
+
+* No AI replies ever
+* No system messages in chat
+* Chat = raw input log only
+
+Each entry block:
+
+* Voice note → waveform + play button
+* Text → simple bubble
+* Image → thumbnail preview
+* Transcription appears under voice note (smaller, lighter text)
+
+⸻
+
+4. AI Extraction Feedback (Critical UX element)
+
+This is where most apps fail—you need tight rules.
+
+After user submits input:
+
+Within 1–2 seconds:
+A small, tappable system tag appears BELOW the message (not in chat bubble):
+
+Examples:
+
+* “New project detected: ADHD app”
+* “Project updated: Robot arm blog”
+* “3 key points extracted”
+
+Visual style:
+
+* Subtle pill / tag (not intrusive)
+* Slight color highlight (consistent across app)
+* Always tappable
+
+On tap:
+
+→ Navigates to relevant Project Page
+
+Hard constraint:
+
+* These tags are the ONLY visible AI feedback in the dump screen
+
+⸻
+
+5. Project Creation Logic (User-visible behavior)
+
+* First time a project is inferred → tag shows “New project”
+* Future inputs → “Project updated”
+* No confirmation dialogs
+* No user decision required
+
+⸻
+
+6. Projects Screen
+
+Access:
+
+* Hamburger menu → “Projects”
+
+Layout:
+
+* Fullscreen horizontal carousel
+* One card centered at a time
+* Partial preview of next/prev cards
+
+Interaction:
+
+* Swipe left/right → switch projects
+* Tap card → open project
+
+Project card contents:
+
+* Project name
+* One-line summary
+* Last activity timestamp
+* Small confidence indicator (optional)
+
+⸻
+
+7. Project Page (Core Product Surface)
+
+This is the most important screen. Lock this down.
+
+⸻
+
+7A. Above the fold (NO SCROLL REQUIRED)
+
+Must include:
+
+1. Project Title
+
+2. Briefing Block (fixed structure):
+
+Order is fixed:
+
+1. Last Known State
+2. Confidence Label
+    * e.g. “Based on info from 5 days ago”
+3. Blockers
+4. Next Actions (max 3)
+
+Constraints:
+
+* Each section max 2–3 lines
+* No paragraphs
+* No overflow above fold
+
+⸻
+
+7B. Below the fold (scrollable)
+
+Sections (in order):
+
+1. Expanded Context
+    * Structured summary of all inputs
+2. Extracted Insights
+    * Bullet points (decisions, ideas, notes)
+3. Raw Inputs
+    * Chronological feed (same format as dump)
+
+⸻
+
+8. Editing Model
+
+* User can tap any section → edit directly
+* No separate “edit mode”
+* Changes update project state immediately
+
+⸻
+
+9. Input Types (Phase 1)
+
+* Text
+* Voice (→ transcription)
+* Image (→ processed + extracted text)
+
+All treated identically downstream.
+
+⸻
+
+10. Re-entry Flow (Critical)
+
+When user returns after inactivity:
+
+1. Opens app → lands on Brain Dump
+2. Sees nothing intrusive
+3. Optional subtle nudge at top:
+    * “You have 2 active projects”
+
+User must choose to enter project, not forced.
+
+⸻
+
+Key UX Principles (Non-negotiable)
+
+* No AI chatter
+* No interruptions
+* No required structure
+* AI is visible only through:
+    * Tags (in dump)
+    * Briefing (in project)
+
+⸻
+
+Where this removes ambiguity for AI
+
+A code generator now knows:
+
+* Exact screens
+* Exact components
+* Exact behavior after each action
+* Where AI is allowed to appear (and where it isn’t)
+
+So it can’t invent:
+
+* Chat responses
+* Extra UI panels
+* Random notifications
+* Alternative layouts
+
+⸻
+
+The one thing you still need to decide
+
+You’re still slightly vague on this:
+
+“intelligent, dynamic project document”
+
+Right now I constrained it into:
+
+* Structured sections + editable
+
+If you don’t lock this, AI will:
+
+* Either over-structure it (Notion clone)
+* Or under-structure it (messy notes)
+
+⸻
+
+If you want to go one level deeper, next step is:
+
+Define the exact JSON schema of the briefing + project state
+→ that’s what will fully lock backend + frontend together.

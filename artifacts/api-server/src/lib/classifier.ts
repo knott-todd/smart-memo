@@ -1,24 +1,32 @@
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { logger } from "./logger";
+import type { ThreadType } from "@workspace/db";
 
 interface ExistingThread {
   id: number;
   title: string;
   description: string | null;
+  threadType: string;
+  lastActivityAt: Date | null;
 }
 
 interface RecentEntry {
   content: string;
   projectTitle: string | null;
+  projectId: number | null;
+  createdAt: Date;
 }
 
 export interface ClassificationResult {
+  outcome: "match" | "new" | "ambiguous";
   projectId: number | null;
   newProjectTitle: string | null;
   newProjectDescription: string | null;
+  threadType: ThreadType;
   updatedTitle: string | null;
   updatedDescription: string | null;
-  isNote: false; // Always false — everything gets a thread now
+  clarificationQuestion: string | null;
+  isNote: false;
 }
 
 export async function classifyInput(
@@ -26,64 +34,98 @@ export async function classifyInput(
   existingThreads: ExistingThread[],
   recentHistory: RecentEntry[] = []
 ): Promise<ClassificationResult> {
+  const now = new Date();
+
   const threadList =
     existingThreads.length > 0
       ? existingThreads
-          .map((t) => `- ID ${t.id}: "${t.title}"${t.description ? ` — ${t.description}` : ""}`)
+          .map((t) => {
+            const minsAgo = t.lastActivityAt
+              ? Math.floor((now.getTime() - new Date(t.lastActivityAt).getTime()) / 60000)
+              : null;
+            const recency =
+              minsAgo !== null
+                ? minsAgo < 60
+                  ? `(active ${minsAgo}m ago)`
+                  : minsAgo < 1440
+                  ? `(active ${Math.floor(minsAgo / 60)}h ago)`
+                  : `(active ${Math.floor(minsAgo / 1440)}d ago)`
+                : "";
+            return `- ID ${t.id}: "${t.title}" [${t.threadType}] ${recency}${t.description ? ` — ${t.description}` : ""}`;
+          })
           .join("\n")
       : "(none yet)";
 
-  const lastEntry = recentHistory[0];
-  const olderHistory = recentHistory.slice(1);
-
-  const immediateContext = lastEntry
-    ? `\nThe entry logged immediately before this one: "${lastEntry.content}"${lastEntry.projectTitle ? ` [→ ${lastEntry.projectTitle}]` : ""}`
-    : "";
-
-  const olderContext =
-    olderHistory.length > 0
-      ? "\nEarlier context:\n" +
-        olderHistory
-          .map((e) => `- "${e.content}"${e.projectTitle ? ` [→ ${e.projectTitle}]` : ""}`)
+  const recentContext =
+    recentHistory.length > 0
+      ? "\nRecent log entries (newest first):\n" +
+        recentHistory
+          .map((e) => {
+            const minsAgo = Math.floor(
+              (now.getTime() - new Date(e.createdAt).getTime()) / 60000
+            );
+            const when =
+              minsAgo < 1
+                ? "just now"
+                : minsAgo < 60
+                ? `${minsAgo}m ago`
+                : `${Math.floor(minsAgo / 60)}h ago`;
+            return `  [${when}${e.projectTitle ? ` → ${e.projectTitle}` : ""}] "${e.content}"`;
+          })
           .join("\n")
       : "";
 
-  const prompt = `You are the threading engine for Continuity — a personal log app. Every entry the user types must be assigned to a thread. Threads are named clusters of related entries. They can be projects, topics, people, recurring ideas — anything.
+  const prompt = `You are the classification engine for Continuity — a personal log app.
+
+Every entry must be assigned to a thread. Threads are named clusters of related entries.
 
 Existing threads:
 ${threadList}
-${immediateContext}
-${olderContext}
+${recentContext}
 
 New entry: "${content}"
 
-Decide ONE of two outcomes:
+THREAD TYPE — assign one:
+- project: something being actively built or worked on over time
+- idea: concept, creative thought, something to explore later
+- admin: logistics, appointments, applications, bureaucracy
+- reminder: one-off action item ("call X", "return Y")
+- reference: notes from conversations, resources, external info
 
-1. MATCH — this entry continues or relates to an existing thread. Use the immediate prior entry as the strongest signal — if this entry feels like a continuation, match it to the same thread. Err heavily toward MATCH when there's any reasonable connection.
+OUTCOME — choose one:
 
-2. NEW — no existing thread fits at all. Create a new one with a specific, natural name. Thread names should be concrete and descriptive (e.g. "dentist appointment", "Continuity app", "half marathon training", "side project pricing"), not vague buckets like "health" or "misc". Even a single one-off thought gets its own thread if it doesn't fit anything existing — it may accumulate more entries later.
+MATCH: entry continues an existing thread.
+  - You must state a clear content reason — not just timing
+  - Temporal proximity alone is NOT sufficient
+  - "Call Learie" and a hardware wiring note same evening = unrelated
+  - Recent activity in same thread raises signal only if content is consistent
 
-Rules:
-- The prior entry is the strongest context signal. Follow-ups, corrections, and continuations all belong to the same thread.
-- Mixed messages (project thought + personal aside) → MATCH to the project thread.
-- There is no NOTE or discard option. Every entry gets a thread.
-- If MATCH: also check whether the entry reveals a better title or description for the thread.
-- If NEW: infer a concise title (2–5 words, lowercase preferred) and a one-sentence description.
+NEW: no existing thread fits.
+  - Name: concrete, 2-5 words, lowercase
+  - Even a one-off thought gets its own thread
+  - Include a one-sentence description
 
-Return JSON only, no other text:
+AMBIGUOUS: genuinely cannot determine correct thread AND consequence of wrong answer is significant.
+  - Use sparingly — short tasks and reminders should just get NEW threads
+  - Still pick a best-guess thread
+  - Provide a short direct clarification question (not "can you provide more context")
+
+Return JSON only:
 {
-  "outcome": "match" | "new",
-  "projectId": <number or null>,
-  "newProjectTitle": <string or null>,
-  "newProjectDescription": <string or null>,
-  "updatedTitle": <string or null>,
-  "updatedDescription": <string or null>
+  "outcome": "match" | "new" | "ambiguous",
+  "projectId": <number | null>,
+  "newProjectTitle": <string | null>,
+  "newProjectDescription": <string | null>,
+  "threadType": "project" | "idea" | "admin" | "reminder" | "reference",
+  "updatedTitle": <string | null>,
+  "updatedDescription": <string | null>,
+  "clarificationQuestion": <string | null>
 }`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      max_completion_tokens: 300,
+      max_completion_tokens: 400,
       messages: [{ role: "user", content: prompt }],
     });
 
@@ -92,42 +134,47 @@ Return JSON only, no other text:
     if (!jsonMatch) throw new Error("No JSON found");
 
     const parsed = JSON.parse(jsonMatch[0]) as {
-      outcome: "match" | "new";
+      outcome?: string;
       projectId?: number | null;
       newProjectTitle?: string | null;
       newProjectDescription?: string | null;
+      threadType?: string;
       updatedTitle?: string | null;
       updatedDescription?: string | null;
+      clarificationQuestion?: string | null;
     };
 
-    if (parsed.outcome === "match" && typeof parsed.projectId === "number") {
-      return {
-        projectId: parsed.projectId,
-        newProjectTitle: null,
-        newProjectDescription: null,
-        updatedTitle: parsed.updatedTitle ?? null,
-        updatedDescription: parsed.updatedDescription ?? null,
-        isNote: false,
-      };
-    }
+    const threadType = (
+      ["project", "idea", "admin", "reminder", "reference"].includes(parsed.threadType ?? "")
+        ? parsed.threadType
+        : "idea"
+    ) as ThreadType;
 
-    // outcome === "new"
+    const outcome =
+      parsed.outcome === "match" || parsed.outcome === "ambiguous" ? parsed.outcome : "new";
+
     return {
-      projectId: null,
+      outcome,
+      projectId: parsed.projectId ?? null,
       newProjectTitle: parsed.newProjectTitle ?? "untitled thread",
       newProjectDescription: parsed.newProjectDescription ?? null,
-      updatedTitle: null,
-      updatedDescription: null,
+      threadType,
+      updatedTitle: parsed.updatedTitle ?? null,
+      updatedDescription: parsed.updatedDescription ?? null,
+      clarificationQuestion: parsed.clarificationQuestion ?? null,
       isNote: false,
     };
   } catch (err) {
-    logger.error({ err }, "Failed to parse classification JSON — creating new thread as fallback");
+    logger.error({ err }, "Classifier failed — fallback to new thread");
     return {
+      outcome: "new",
       projectId: null,
       newProjectTitle: "untitled thread",
       newProjectDescription: null,
+      threadType: "idea",
       updatedTitle: null,
       updatedDescription: null,
+      clarificationQuestion: null,
       isNote: false,
     };
   }

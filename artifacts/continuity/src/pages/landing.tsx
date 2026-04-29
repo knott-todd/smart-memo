@@ -1,7 +1,7 @@
 import { useLocation } from "wouter";
-import { Menu } from "lucide-react";
 import { useState } from "react";
 import { SideDrawer } from "@/components/side-drawer";
+import { Menu } from "lucide-react";
 
 export default function Landing() {
   const [, setLocation] = useLocation();
@@ -14,40 +14,32 @@ export default function Landing() {
       <div className="px-4 pt-4">
         <button
           onClick={() => setDrawerOpen(true)}
-          className="text-muted-foreground hover:text-foreground transition-colors p-1 -ml-1"
-          aria-label="Open menu"
+          className="text-muted-foreground/40 hover:text-foreground transition-colors p-1 -ml-1"
         >
           <Menu className="w-5 h-5" />
         </button>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-6 gap-3 pb-12">
-        {/* App name */}
-        <p className="font-serif text-muted-foreground/25 text-sm tracking-widest uppercase mb-4 select-none">
+      <div className="flex-1 flex flex-col items-center justify-center px-5 gap-2.5 pb-10">
+        <p className="font-serif text-muted-foreground/20 text-xs tracking-widest uppercase mb-5 select-none">
           Continuity
         </p>
 
-        <button
-          onClick={() => setLocation("/dump")}
-          className="w-full max-w-sm bg-card border border-border/50 rounded-2xl flex flex-col items-start justify-end hover:border-border/80 active:scale-[0.98] transition-all px-6"
-          style={{ height: "clamp(100px, 26vh, 170px)" }}
-        >
-          <span className="font-serif text-2xl text-foreground/75 mb-1.5">Log</span>
-          <span className="text-xs text-muted-foreground/25 mb-5 leading-snug">
-            Drop anything — thought, update, idea
-          </span>
-        </button>
-
-        <button
-          onClick={() => setLocation("/projects")}
-          className="w-full max-w-sm bg-card border border-border/50 rounded-2xl flex flex-col items-start justify-end hover:border-border/80 active:scale-[0.98] transition-all px-6"
-          style={{ height: "clamp(100px, 26vh, 170px)" }}
-        >
-          <span className="font-serif text-2xl text-foreground/75 mb-1.5">Threads</span>
-          <span className="text-xs text-muted-foreground/25 mb-5 leading-snug">
-            Everything you've logged, organised
-          </span>
-        </button>
+        {[
+          { label: "Now", sub: "What to do today", path: "/now" },
+          { label: "Log", sub: "Drop anything", path: "/dump" },
+          { label: "Threads", sub: "Everything you've noted", path: "/projects" },
+        ].map(({ label, sub, path }) => (
+          <button
+            key={path}
+            onClick={() => setLocation(path)}
+            className="w-full max-w-sm bg-card border border-border/40 rounded-2xl flex flex-col items-start justify-end hover:border-border/70 active:scale-[0.99] transition-all px-5"
+            style={{ height: "clamp(80px, 18vh, 130px)" }}
+          >
+            <span className="font-serif text-xl text-foreground/75 mb-0.5">{label}</span>
+            <span className="text-xs text-muted-foreground/25 mb-4">{sub}</span>
+          </button>
+        ))}
       </div>
     </div>
   );

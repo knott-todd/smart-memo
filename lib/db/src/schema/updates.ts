@@ -5,9 +5,18 @@ import { projectsTable } from "./projects";
 
 export const updatesTable = pgTable("updates", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
+  projectId: integer("project_id")
+    .notNull()
+    .references(() => projectsTable.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
-  sourceType: text("source_type").notNull().default("text"), // text | voice | worksheet
+  sourceType: text("source_type").notNull().default("text"), // text | voice | worksheet | whatsapp
+
+  // Clarification state — only set when classifier was uncertain
+  // clarificationStatus: null = no ambiguity | pending | answered | dismissed
+  clarificationStatus: text("clarification_status"),
+  clarificationQuestion: text("clarification_question"),
+  clarificationAnswer: text("clarification_answer"),
+
   tags: text("tags").array().notNull().default([]),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
